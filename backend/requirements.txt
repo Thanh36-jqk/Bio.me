@@ -1,57 +1,21 @@
 # Core API
 fastapi>=0.109.0
 uvicorn[standard]>=0.27.0
-gunicorn>=21.2.0
 python-multipart>=0.0.6
-websockets>=12.0
-python-socketio>=5.10.0
+gunicorn>=21.2.0
 
-# Database & Caching  
+# Database
 motor>=3.3.2
 pymongo>=4.6.1
-redis>=5.0.1
 dnspython>=2.4.2
+python-dotenv>=1.0.0
 
-# Task Queue
-celery[redis]>=5.3.4
+# Computer Vision & Math
+numpy>=1.24.0
+opencv-python-headless>=4.9.0
 
-# Authentication & Security
+# Utilities
+requests>=2.31.0
+loguru>=0.7.2
 python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4
-python-dotenv>=1.0.0
-pyjwt>=2.8.0
-
-# ML/DL - Deep Learning Frameworks
-torch>=2.1.0
-torchvision>=0.16.0
-tensorflow>=2.15.0
-onnx>=1.15.0
-onnxruntime>=1.16.0
-
-# ML/DL - Face Recognition (SOTA)
-insightface>=0.7.3
-facenet-pytorch>=2.5.3
-dlib>=19.24.0
-mediapipe>=0.10.9
-
-# ML/DL - Computer Vision
-opencv-python-headless>=4.9.0
-scikit-image>=0.22.0
-albumentations>=1.3.1
-
-# ML/DL - Segmentation (for Iris)
-segmentation-models-pytorch>=0.3.3
-
-# Core ML Libraries
-numpy>=1.24.0
-scipy>=1.11.0
-scikit-learn>=1.3.0
-pillow>=10.2.0
-
-# Monitoring & Logging
-prometheus-client>=0.19.0
-sentry-sdk[fastapi]>=1.39.0
-loguru>=0.7.2
-
-# Storage
-minio>=7.2.0.6
