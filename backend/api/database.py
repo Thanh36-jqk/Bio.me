@@ -8,6 +8,8 @@ import logging
 from datetime import datetime
 import os
 
+import certifi
+
 logger = logging.getLogger(__name__)
 
 class MongoDBManager:
@@ -30,7 +32,11 @@ class MongoDBManager:
     async def connect(self):
         """Connect to MongoDB"""
         try:
-            self.client = AsyncIOMotorClient(self.connection_string)
+            # Use certifi for robust SSL certificate handling
+            self.client = AsyncIOMotorClient(
+                self.connection_string,
+                tlsCAFile=certifi.where()
+            )
             # Test connection
             await self.client.admin.command('ping')
             
