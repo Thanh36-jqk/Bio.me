@@ -1,4 +1,4 @@
-# 🔐 Bio.me - Enterprise Biometric Authentication System
+# 🔐 Bio.me - Enterprise Biometric Authentication System 🚀
 
 > **Advanced Multi-Factor Biometric Authentication Platform with 20+ Modern Technologies**
 

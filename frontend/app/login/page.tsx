@@ -6,12 +6,25 @@ import axios from 'axios';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+interface BiometricResult {
+    success: boolean;
+    message: string;
+    confidence?: number;
+    distance?: number;
+}
+
+interface ResultsState {
+    face: BiometricResult | null;
+    iris: BiometricResult | null;
+    fingerprint: BiometricResult | null;
+}
+
 export default function LoginPage() {
     const [step, setStep] = useState(0); // 0: username, 1: face, 2: iris, 3: fingerprint, 4: success
     const [username, setUsername] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [results, setResults] = useState({ face: null, iris: null, fingerprint: null });
+    const [results, setResults] = useState<ResultsState>({ face: null, iris: null, fingerprint: null });
 
     const handleUsernameSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
