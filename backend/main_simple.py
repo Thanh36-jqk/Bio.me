@@ -32,7 +32,9 @@ app.add_middleware(
 
 # Models
 class RegisterRequest(BaseModel):
-    username: str
+    name: str
+    age: int
+    email: str
 
 class AuthenticationResponse(BaseModel):
     success: bool
@@ -85,88 +87,120 @@ async def list_users():
         "users": users
     }
 
+@app.post("/register/user")
+async def register_initial_user(
+    name: str = Form(...),
+    age: int = Form(...),
+    email: str = Form(...)
+):
+    """
+    Step 1: Register initial user info
+    """
+    try:
+        # Check if email exists
+        user = await db_manager.get_user(email)
+        if user:
+            return {
+                "success": False,
+                "message": "Email already registered"
+            }
+            
+        # Create user
+        user_id = await db_manager.create_user(email, name, age)
+        return {
+            "success": True,
+            "message": "User info registered successfully",
+            "user_id": user_id
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": str(e)
+        }
+
 @app.post("/register/face")
 async def register_face(
-    username: str = Form(...),
+    email: str = Form(...),
     images: list[UploadFile] = File(...)
 ):
     """
     Register user's face biometric
     
     Args:
-        username: User identifier
+        email: User email identifier
         images: List of face images (5-10 recommended)
     """
-    print(f"📸 Registering face for user: {username}")
+    print(f"📸 Registering face for user: {email}")
     print(f"   Received {len(images)} face images")
     
-    # Check if user exists, create if not
-    user = await db_manager.get_user(username)
+    # Check if user exists, create if not (legacy support, but better to use /register/user first)
+    user = await db_manager.get_user(email)
     if not user:
-        await db_manager.create_user(username)
-        print(f"✓ Created new user: {username}")
+         # Fallback: create with dummy name/age if not exists (shouldn't happen in new flow)
+        await db_manager.create_user(email, "Unknown", 18)
+        print(f"✓ Created new user fallback: {email}")
     
     # Update biometric status
-    await db_manager.update_biometric_status(username, "face", True)
+    await db_manager.update_biometric_status(email, "face", True)
     
-    print(f"✓ Face registered successfully for {username}")
+    print(f"✓ Face registered successfully for {email}")
     
     return {
         "success": True,
-        "username": username,
+        "email": email,
         "biometric_type": "face",
         "num_images": len(images),
-        "message": f"Face biometric registered for {username}"
+        "message": f"Face biometric registered for {email}"
     }
 
 @app.post("/register/iris")
 async def register_iris(
-    username: str = Form(...),
+    email: str = Form(...),
     images: list[UploadFile] = File(...)
 ):
     """Register user's iris biometric"""
-    print(f"👁️ Registering iris for user: {username}")
-    print(f"   Received{len(images)} iris images")
+    print(f"👁️ Registering iris for user: {email}")
+    print(f"   Received {len(images)} iris images")
     
-    user = await db_manager.get_user(username)
+    user = await db_manager.get_user(email)
     if not user:
-        await db_manager.create_user(username)
+        return {"success": False, "message": "User not found. Please register info first."}
     
-    await db_manager.update_biometric_status(username, "iris", True)
+    await db_manager.update_biometric_status(email, "iris", True)
     
-    print(f"✓ Iris registered successfully for {username}")
+    print(f"✓ Iris registered successfully for {email}")
     
     return {
         "success": True,
-        "username": username,
+        "email": email,
         "biometric_type": "iris",
         "num_images": len(images),
-        "message": f"Iris biometric registered for {username}"
+        "message": f"Iris biometric registered for {email}"
     }
 
 @app.post("/register/fingerprint")
 async def register_fingerprint(
-    username: str = Form(...),
+    email: str = Form(...),
     images: list[UploadFile] = File(...)
 ):
     """Register user's fingerprint biometric"""
-    print(f"👆 Registering fingerprint for user: {username}")
+    print(f"👆 Registering fingerprint for user: {email}")
     print(f"   Received {len(images)} fingerprint images")
     
-    user = await db_manager.get_user(username)
+    user = await db_manager.get_user(email)
     if not user:
-        await db_manager.create_user(username)
+        return {"success": False, "message": "User not found. Please register info first."}
     
-    await db_manager.update_biometric_status(username, "fingerprint", True)
+    await db_manager.update_biometric_status(email, "fingerprint", True)
     
-    print(f"✓ Fingerprint registered successfully for {username}")
+    print(f"✓ Fingerprint registered successfully for {email}")
     
     return {
         "success": True,
-        "username": username,
+        "email": email,
         "biometric_type": "fingerprint",
         "num_images": len(images),
-        "message": f"Fingerprint biometric registered for {username}"
+        "message": f"Fingerprint biometric registered for {email}"
     }
 
 @app.post("/authenticate/face", response_model=AuthenticationResponse)
@@ -250,7 +284,7 @@ async def authenticate_fingerprint(username: str = Form(...), image: UploadFile 
 
 @app.post("/authenticate", response_model=AuthenticationResponse)
 async def authenticate_multi_biometric(
-    username: str = Form(...),
+    email: str = Form(...),
     face_image: UploadFile = File(None),
     iris_image: UploadFile = File(None),
     fingerprint_image: UploadFile = File(None)
@@ -260,10 +294,10 @@ async def authenticate_multi_biometric(
     Requires at least 2 out of 3 biometrics to pass
     Includes liveness detection for anti-spoofing
     """
-    print(f"🔐 Multi-biometric authentication for: {username}")
+    print(f"🔐 Multi-biometric authentication for: {email}")
     
     # Check user exists
-    user = await db_manager.get_user(username)
+    user = await db_manager.get_user(email)
     if not user:
         return AuthenticationResponse(
             success=False,
@@ -364,7 +398,7 @@ async def authenticate_multi_biometric(
         print(f"✅ AUTHENTICATION SUCCESS: {passed_count}/{total_count} biometrics passed")
         return AuthenticationResponse(
             success=True,
-            username=username,
+            email=email,
             passed_biometrics=passed_count,
             message=f"Authentication successful ({passed_count}/{total_count} biometrics passed)",
             liveness_checks=liveness_results
@@ -379,12 +413,12 @@ async def authenticate_multi_biometric(
             liveness_checks=liveness_results
         )
 
-@app.delete("/users/{username}")
-async def delete_user(username: str):
+@app.delete("/users/{email}")
+async def delete_user(email: str):
     """Delete a user"""
-    success = await db_manager.delete_user(username)
+    success = await db_manager.delete_user(email)
     if success:
-        return {"success": True, "message": f"User {username} deleted"}
+        return {"success": True, "message": f"User {email} deleted"}
     return {"success": False, "message": "User not found"}
 
 @app.get("/stats")

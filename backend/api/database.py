@@ -58,12 +58,14 @@ class MongoDBManager:
             self.client.close()
             logger.info("Disconnected from MongoDB")
     
-    async def create_user(self, username: str) -> str:
+    async def create_user(self, email: str, name: str, age: int) -> str:
         """
         Create a new user
         
         Args:
-            username: Unique username
+            email: Unique email address
+            name: Full name
+            age: User age
         
         Returns:
             str: User ID
@@ -72,12 +74,14 @@ class MongoDBManager:
             Exception: If username already exists
         """
         # Check if user exists
-        existing = await self.users_collection.find_one({"username": username})
+        existing = await self.users_collection.find_one({"email": email})
         if existing:
-            raise Exception(f"Username '{username}' already exists")
+            raise Exception(f"Email '{email}' already exists")
         
         user_doc = {
-            "username": username,
+            "email": email,
+            "name": name,
+            "age": age,
             "face_registered": False,
             "iris_registered": False,
             "fingerprint_registered": False,
@@ -86,31 +90,32 @@ class MongoDBManager:
         }
         
         result = await self.users_collection.insert_one(user_doc)
-        logger.info(f"Created user: {username}")
+        result = await self.users_collection.insert_one(user_doc)
+        logger.info(f"Created user: {email} ({name})")
         return str(result.inserted_id)
     
-    async def get_user(self, username: str) -> Optional[Dict]:
+    async def get_user(self, email: str) -> Optional[Dict]:
         """
-        Get user by username
+        Get user by email
         
         Args:
-            username: Username to lookup
+            email: Email to lookup
         
         Returns:
             Dict with user info or None
         """
-        user = await self.users_collection.find_one({"username": username})
+        user = await self.users_collection.find_one({"email": email})
         if user:
             user['_id'] = str(user['_id'])
             return user
         return None
     
-    async def update_user_biometric(self, username: str, biometric_type: str, status: bool):
+    async def update_user_biometric(self, email: str, biometric_type: str, status: bool):
         """
         Update biometric registration status
         
         Args:
-            username: Username
+            email: User email
             biometric_type: 'face', 'iris', or 'fingerprint'
             status: True if registered, False otherwise
         """
@@ -121,7 +126,8 @@ class MongoDBManager:
         field = f"{biometric_type}_registered"
         
         result = await self.users_collection.update_one(
-            {"username": username},
+        result = await self.users_collection.update_one(
+            {"email": email},
             {
                 "$set": {
                     field: status,
@@ -131,7 +137,7 @@ class MongoDBManager:
         )
         
         if result.modified_count > 0:
-            logger.info(f"Updated {biometric_type} status for {username}: {status}")
+            logger.info(f"Updated {biometric_type} status for {email}: {status}")
         return result.modified_count > 0
     
     async def delete_user(self, username: str) -> bool:
