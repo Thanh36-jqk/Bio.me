@@ -5,6 +5,8 @@ Enterprise-grade biometric user management
 from motor.motor_asyncio import AsyncIOMotorClient
 from typing import Optional, Dict, List
 import logging
+import certifi
+
 logger = logging.getLogger(__name__)
 
 class MongoDBManager:
@@ -27,11 +29,12 @@ class MongoDBManager:
     async def connect(self):
         """Connect to MongoDB"""
         try:
-            # Simplified connection - relies on system certificates
-            # This often works better on Render/Cloud environments
+            # Connect using certifi for consistent SSL across environments
+            # This fixes 'certificate verify failed' and other SSL errors
             self.client = AsyncIOMotorClient(
                 self.connection_string,
-                serverSelectionTimeoutMS=5000  # Fail fast (5s)
+                tlsCAFile=certifi.where(),
+                serverSelectionTimeoutMS=5000
             )
             # Test connection
             await self.client.admin.command('ping')

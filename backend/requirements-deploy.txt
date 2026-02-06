@@ -17,6 +17,7 @@ numpy>=1.24.0
 
 # Environment
 python-dotenv>=1.0.0
+certifi>=2024.2.2
 
 # CORS
 pydantic>=2.7.0
