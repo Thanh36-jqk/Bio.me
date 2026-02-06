@@ -20,7 +20,8 @@ app = FastAPI(title="Biometric MFA API", version="2.0.0")
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],
+    # Allow all origins in production to ensure Vercel frontend can connect
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -43,9 +44,11 @@ async def startup():
     await db_manager.connect()
     print("✓ MongoDB connected")
     print("✓ Backend started successfully")
-    print("="*50)
+    print("="*60)
+    print("🚀 BIOMETRIC MFA BACKEND SERVER - v1.2 (SSL CERTIFI FIX)")
+    print("="*60)
     print("API Documentation: http://localhost:8000/docs")
-    print("="*50)
+    print("="*60)
 
 @app.on_event("shutdown")
 async def shutdown():
