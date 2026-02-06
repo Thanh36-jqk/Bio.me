@@ -18,21 +18,14 @@ export default function RegisterPage() {
     const handleUsernameSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
-        setLoading(true);
 
-        try {
-            const response = await axios.post(`${API_BASE}/api/user/register`, { username }, {
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-            });
-
-            if (response.data.success) {
-                setStep(1);
-            }
-        } catch (err: any) {
-            setError(err.response?.data?.detail || 'Username already exists or error occurred');
-        } finally {
-            setLoading(false);
+        if (username.length < 3) {
+            setError('Username must be at least 3 characters');
+            return;
         }
+
+        // Skip API call - backend creates user on first biometric upload
+        setStep(1);
     };
 
     const handleBiometricUpload = async (files: File[], type: 'face' | 'iris' | 'fingerprint') => {
@@ -49,7 +42,7 @@ export default function RegisterPage() {
             formData.append('username', username);
             files.forEach(file => formData.append('files', file));
 
-            const response = await axios.post(`${API_BASE}/api/${type}/register`, formData, {
+            const response = await axios.post(`${API_BASE}/register/${type}`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
 
