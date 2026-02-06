@@ -1,0 +1,10 @@
+{
+    "name": "bio-me-root",
+    "version": "1.0.0",
+    "description": "Biometric MFA System Root",
+    "scripts": {
+        "push": "git add . && git commit -m \"Auto update via npm run push\" && git push"
+    },
+    "author": "",
+    "license": "ISC"
+}
