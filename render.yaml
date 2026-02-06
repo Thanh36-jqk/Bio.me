@@ -1,0 +1,17 @@
+# Render.com configuration for FastAPI backend
+services:
+  - type: web
+    name: biometric-mfa-backend
+    env: python
+    region: singapore
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main_simple.py
+    envVars:
+      - key: MONGODB_URI
+        sync: false
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: PORT
+        value: "8000"
+    healthCheckPath: /

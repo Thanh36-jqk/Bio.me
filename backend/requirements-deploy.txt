@@ -1,0 +1,29 @@
+# Simplified requirements for free tier deployment
+# Core packages only - no heavy ML libraries
+
+# API Framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.6
+
+# Database
+pymongo>=4.6.1
+motor>=3.3.2
+dnspython>=2.4.2
+
+# Basic CV (lightweight)
+opencv-python-headless>=4.9.0
+numpy>=1.24.0
+
+# Environment
+python-dotenv>=1.0.0
+
+# CORS
+pydantic>=2.7.0
+
+# NOTE: Heavy ML packages commented out for free tier
+# Uncomment when upgrading to paid hosting with more resources
+# torch>=2.1.0
+# tensorflow>=2.15.0
+# insightface>=0.7.3
+# facenet-pytorch>=2.5.3

@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  # Redis - Caching & Message Broker
+  redis:
+    image: redis:7-alpine
+    container_name: biometric_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - biometric_network
+
+  # MongoDB - User Database
+  mongodb:
+    image: mongo:7
+    container_name: biometric_mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123
+    networks:
+      - biometric_network
+
+  # MinIO - Object Storage for Biometric Templates
+  minio:
+    image: minio/minio
+    container_name: biometric_minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    command: server /data --console-address ":9001"
+    networks:
+      - biometric_network
+
+  # Prometheus - Metrics Collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: biometric_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - biometric_network
+
+  # Grafana - Visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: biometric_grafana
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+    depends_on:
+      - prometheus
+    networks:
+      - biometric_network
+
+volumes:
+  redis_data:
+  mongo_data:
+  minio_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  biometric_network:
+    driver: bridge

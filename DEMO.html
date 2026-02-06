@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Biometric MFA System - Demo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+        }
+    </style>
+</head>
+<body class="antialiased">
+    <div class="container mx-auto px-4 py-16">
+        <!-- Header -->
+        <div class="text-center mb-16">
+            <h1 class="text-6xl font-bold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-600">
+                🔐 Biometric MFA System
+            </h1>
+            <p class="text-xl text-gray-300">
+                Multi-Factor Authentication with Deep Learning
+            </p>
+            <p class="text-sm text-gray-400 mt-2">
+                Face Recognition • Iris Matching • Fingerprint Verification
+            </p>
+        </div>
+
+        <!-- Action Cards -->
+        <div class="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto mb-16">
+            <!-- Login Card -->
+            <div class="bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20 hover:bg-white/20 transition-all cursor-pointer hover:border-blue-500/50 transform hover:scale-105">
+                <div class="text-5xl mb-4">🔐</div>
+                <h2 class="text-2xl font-bold mb-2 text-white">Login</h2>
+                <p class="text-gray-300 mb-4">
+                    Authenticate using your biometric credentials
+                </p>
+                <ul class="text-sm text-gray-400 space-y-2">
+                    <li>✓ Face Recognition (99% accuracy)</li>
+                    <li>✓ Iris Verification</li>
+                    <li>✓ Fingerprint Matching</li>
+                </ul>
+                <button class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors" onclick="showLoginFlow()">
+                    Xem Demo Login →
+                </button>
+            </div>
+
+            <!-- Register Card -->
+            <div class="bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20 hover:bg-white/20 transition-all cursor-pointer hover:border-purple-500/50 transform hover:scale-105">
+                <div class="text-5xl mb-4">📝</div>
+                <h2 class="text-2xl font-bold mb-2 text-white">Register</h2>
+                <p class="text-gray-300 mb-4">
+                    Create a new account with biometric enrollment
+                </p>
+                <ul class="text-sm text-gray-400 space-y-2">
+                    <li>✓ Quick 3-step registration</li>
+                    <li>✓ Secure biometric storage</li>
+                    <li>✓ Instant verification</li>
+                </ul>
+                <button class="mt-4 w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-colors" onclick="showRegisterFlow()">
+                    Xem Demo Register →
+                </button>
+            </div>
+        </div>
+
+        <!-- Features -->
+        <div class="max-w-4xl mx-auto mb-16">
+            <h3 class="text-2xl font-bold text-center mb-8 text-white">
+                Powered by State-of-the-Art Deep Learning
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-white/5 backdrop-blur rounded-lg p-6 border border-white/10">
+                    <div class="text-3xl mb-3">🤖</div>
+                    <h4 class="font-bold text-white mb-2">InsightFace</h4>
+                    <p class="text-sm text-gray-400">
+                        ArcFace algorithm with 99%+ accuracy on standard benchmarks
+                    </p>
+                </div>
+                <div class="bg-white/5 backdrop-blur rounded-lg p-6 border border-white/10">
+                    <div class="text-3xl mb-3">👁️</div>
+                    <h4 class="font-bold text-white mb-2">Gabor Filters</h4>
+                    <p class="text-sm text-gray-400">
+                        Advanced iris pattern recognition with Hamming distance matching
+                    </p>
+                </div>
+                <div class="bg-white/5 backdrop-blur rounded-lg p-6 border border-white/10">
+                    <div class="text-3xl mb-3">👆</div>
+                    <h4 class="font-bold text-white mb-2">ORB Features</h4>
+                    <p class="text-sm text-gray-400">
+                        Fast and accurate fingerprint minutiae detection
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tech Stack -->
+        <div class="max-w-4xl mx-auto mb-16">
+            <h3 class="text-2xl font-bold text-center mb-8 text-white">
+                Tech Stack
+            </h3>
+            <div class="bg-white/5 backdrop-blur rounded-lg p-8 border border-white/10">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+                    <div>
+                        <div class="text-3xl mb-2">⚛️</div>
+                        <div class="text-white font-bold">Next.js 14</div>
+                        <div class="text-gray-400 text-sm">Frontend</div>
+                    </div>
+                    <div>
+                        <div class="text-3xl mb-2">🐍</div>
+                        <div class="text-white font-bold">FastAPI</div>
+                        <div class="text-gray-400 text-sm">Backend</div>
+                    </div>
+                    <div>
+                        <div class="text-3xl mb-2">🧠</div>
+                        <div class="text-white font-bold">InsightFace</div>
+                        <div class="text-gray-400 text-sm">Deep Learning</div>
+                    </div>
+                    <div>
+                        <div class="text-3xl mb-2">☁️</div>
+                        <div class="text-white font-bold">Vercel</div>
+                        <div class="text-gray-400 text-sm">Deployment</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Demo Info -->
+        <div class="text-center mb-8">
+            <div class="inline-block bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-6 py-4">
+                <p class="text-sm text-yellow-200">
+                    💡 <strong>Demo Mode:</strong> Đây là bản demo tĩnh. Để chạy ứng dụng thực, vui lòng xem hướng dẫn bên dưới.
+                </p>
+            </div>
+        </div>
+
+        <!-- Setup Instructions -->
+        <div class="max-w-4xl mx-auto bg-white/5 backdrop-blur rounded-lg p-8 border border-white/10">
+            <h3 class="text-2xl font-bold text-white mb-4">📋 Hướng Dẫn Chạy Ứng Dụng Thực</h3>
+            
+            <div class="mb-6">
+                <h4 class="text-lg font-bold text-blue-400 mb-2">Bước 1: Cài Đặt Môi Trường</h4>
+                <div class="bg-black/30 rounded p-4 text-gray-300 text-sm space-y-2">
+                    <p>• Python 3.11+: <a href="https://www.python.org/downloads/" target="_blank" class="text-blue-400 hover:underline">Download Python</a></p>
+                    <p>• Node.js 18+: <a href="https://nodejs.org/" target="_blank" class="text-blue-400 hover:underline">Download Node.js</a></p>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <h4 class="text-lg font-bold text-green-400 mb-2">Bước 2: Cài Dependencies Backend</h4>
+                <div class="bg-black/50 rounded p-4 font-mono text-sm text-green-300">
+                    <p>cd backend</p>
+                    <p>pip install -r requirements.txt</p>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <h4 class="text-lg font-bold text-green-400 mb-2">Bước 3: Cài Dependencies Frontend</h4>
+                <div class="bg-black/50 rounded p-4 font-mono text-sm text-green-300">
+                    <p>cd frontend</p>
+                    <p>npm install</p>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <h4 class="text-lg font-bold text-purple-400 mb-2">Bước 4: Chạy Servers</h4>
+                <div class="bg-black/50 rounded p-4 font-mono text-sm text-purple-300">
+                    <p class="mb-2"># Terminal 1 - Backend:</p>
+                    <p>cd backend</p>
+                    <p>python main.py</p>
+                    <p class="mt-2 text-gray-400"># → API: http://localhost:8000</p>
+                    
+                    <p class="mt-4 mb-2"># Terminal 2 - Frontend:</p>
+                    <p>cd frontend</p>
+                    <p>npm run dev</p>
+                    <p class="mt-2 text-gray-400"># → App: http://localhost:3000</p>
+                </div>
+            </div>
+
+            <div class="bg-blue-500/10 border border-blue-500/30 rounded p-4 text-blue-200 text-sm">
+                <strong>✨ Tip:</strong> Sau khi cài đặt, bạn có thể deploy lên Vercel miễn phí với GitHub account: <strong>thanh36-jqk</strong>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="mt-16 text-center text-gray-500 text-sm">
+            <p>Built with Next.js, FastAPI, InsightFace, OpenCV & TensorFlow</p>
+            <p class="mt-2">
+                <a href="https://github.com/thanh36-jqk" target="_blank" rel="noopener noreferrer" class="hover:text-blue-400 transition-colors">
+                    GitHub: thanh36-jqk
+                </a>
+            </p>
+        </footer>
+    </div>
+
+    <!-- Modal for Demo Flow -->
+    <div id="demoModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50">
+        <div class="bg-gray-900 rounded-2xl p-8 max-w-2xl mx-4 border border-white/20">
+            <h3 id="modalTitle" class="text-2xl font-bold text-white mb-4"></h3>
+            <div id="modalContent" class="text-gray-300"></div>
+            <button onclick="hideModal()" class="mt-6 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">
+                Đóng
+            </button>
+        </div>
+    </div>
+
+    <script>
+        function showLoginFlow() {
+            document.getElementById('modalTitle').textContent = '🔐 Login Flow Demo';
+            document.getElementById('modalContent').innerHTML = `
+                <div class="space-y-4">
+                    <div class="bg-white/5 rounded-lg p-4 border border-blue-500/30">
+                        <strong class="text-blue-400">Step 1:</strong> Nhập username
+                    </div>
+                    <div class="bg-white/5 rounded-lg p-4 border border-green-500/30">
+                        <strong class="text-green-400">Step 2:</strong> Upload ảnh khuôn mặt → InsightFace verify
+                        <div class="text-sm mt-2 text-gray-400">✓ 99% accuracy với ArcFace algorithm</div>
+                    </div>
+                    <div class="bg-white/5 rounded-lg p-4 border border-yellow-500/30">
+                        <strong class="text-yellow-400">Step 3:</strong> Upload ảnh mống mắt → Gabor matching
+                        <div class="text-sm mt-2 text-gray-400">✓ 98% accuracy với Hamming distance</div>
+                    </div>
+                    <div class="bg-white/5 rounded-lg p-4 border border-purple-500/30">
+                        <strong class="text-purple-400">Step 4:</strong> Upload ảnh vân tay → ORB matching
+                        <div class="text-sm mt-2 text-gray-400">✓ 97% accuracy với feature detection</div>
+                    </div>
+                    <div class="bg-green-500/10 rounded-lg p-4 border border-green-500/50 text-center">
+                        <strong class="text-green-400">🎉 Success! Authentication Complete</strong>
+                    </div>
+                </div>
+            `;
+            document.getElementById('demoModal').classList.remove('hidden');
+            document.getElementById('demoModal').classList.add('flex');
+        }
+
+        function showRegisterFlow() {
+            document.getElementById('modalTitle').textContent = '📝 Registration Flow Demo';
+            document.getElementById('modalContent').innerHTML = `
+                <div class="space-y-4">
+                    <div class="bg-white/5 rounded-lg p-4 border border-blue-500/30">
+                        <strong class="text-blue-400">Step 1:</strong> Tạo username mới
+                    </div>
+                    <div class="bg-white/5 rounded-lg p-4 border border-green-500/30">
+                        <strong class="text-green-400">Step 2:</strong> Upload 5-15 ảnh khuôn mặt
+                        <div class="text-sm mt-2 text-gray-400">→ Hệ thống lưu embeddings 512-dim</div>
+                    </div>
+                    <div class="bg-white/5 rounded-lg p-4 border border-yellow-500/30">
+                        <strong class="text-yellow-400">Step 3:</strong> Upload 3-10 ảnh mống mắt
+                        <div class="text-sm mt-2 text-gray-400">→ Trích xuất iris codes với Gabor</div>
+                    </div>
+                    <div class="bg-white/5 rounded-lg p-4 border border-purple-500/30">
+                        <strong class="text-purple-400">Step 4:</strong> Upload 3-10 ảnh vân tay
+                        <div class="text-sm mt-2 text-gray-400">→ Lưu ORB features</div>
+                    </div>
+                    <div class="bg-green-500/10 rounded-lg p-4 border border-green-500/50 text-center">
+                        <strong class="text-green-400">🎊 Registration Complete!</strong>
+                    </div>
+                </div>
+            `;
+            document.getElementById('demoModal').classList.remove('hidden');
+            document.getElementById('demoModal').classList.add('flex');
+        }
+
+        function hideModal() {
+            document.getElementById('demoModal').classList.add('hidden');
+            document.getElementById('demoModal').classList.remove('flex');
+        }
+    </script>
+</body>
+</html>
