@@ -311,7 +311,7 @@ export default function LoginPage() {
 
                                             {facePreview ? (
                                                 <div className="relative">
-                                                    <img src={facePreview} alt="Face" className="w-full rounded-xl" />
+                                                    <img src={facePreview} alt="Captured face" className="w-full rounded-xl" />
                                                     <button
                                                         onClick={() => {
                                                             setFaceImage(null);
@@ -362,7 +362,7 @@ export default function LoginPage() {
                                                     <div className="relative w-full h-full">
                                                         <img
                                                             src={URL.createObjectURL(irisFile)}
-                                                            alt="Iris"
+                                                            alt="Uploaded iris scan"
                                                             className="w-full h-full object-cover rounded-xl"
                                                         />
                                                         <button
@@ -415,7 +415,7 @@ export default function LoginPage() {
                                                     <div className="relative w-full h-full">
                                                         <img
                                                             src={URL.createObjectURL(fingerprintFile)}
-                                                            alt="Fingerprint"
+                                                            alt="Uploaded fingerprint scan"
                                                             className="w-full h-full object-cover rounded-xl"
                                                         />
                                                         <button
