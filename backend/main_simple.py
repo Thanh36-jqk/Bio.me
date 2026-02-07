@@ -30,10 +30,23 @@ from pydantic import BaseModel, EmailStr, Field
 from api.database import db_manager
 from api.liveness_detection import liveness_detector
 
-# Biometric Recognizers (Upgraded to Production Quality)
+# Biometric Recognizers (Production Quality with Deep Learning)
 from api.face_recognition import FaceRecognizer
-from api.iris_recognition import IrisRecognizer
-from api.fingerprint_recognition import FingerprintRecognizer
+
+# Import DL modules with fallback to traditional
+try:
+    from api.iris_recognition_dl import IrisRecognizerDL
+    IRIS_DL_AVAILABLE = True
+except ImportError:
+    IRIS_DL_AVAILABLE = False
+    from api.iris_recognition import IrisRecognizer
+
+try:
+    from api.fingerprint_recognition_dl import FingerprintRecognizerDL
+    FINGERPRINT_DL_AVAILABLE = True
+except ImportError:
+    FINGERPRINT_DL_AVAILABLE = False
+    from api.fingerprint_recognition import FingerprintRecognizer
 
 # ============================================================================
 # CONFIGURATION CONSTANTS
@@ -42,10 +55,12 @@ from api.fingerprint_recognition import FingerprintRecognizer
 API_VERSION = "2.0.0"
 API_TITLE = "Biometric MFA API"
 
-# Biometric thresholds (balanced for HR presentation)
-FACE_SIMILARITY_THRESHOLD = 0.60   # Cosine similarity (InsightFace recommendation)
-IRIS_HAMMING_THRESHOLD = 0.32      # Hamming distance (Daugman's standard)
-FINGERPRINT_MIN_MATCHES = 8        # Minimum SIFT matches (balanced)
+# Biometric thresholds (optimized for Deep Learning)
+FACE_SIMILARITY_THRESHOLD = 0.60      # Cosine similarity (InsightFace)
+IRIS_DL_SIMILARITY_THRESHOLD = 0.85   # DL iris (CNN embeddings)
+IRIS_HAMMING_THRESHOLD = 0.32         # Traditional iris (Gabor)
+FINGERPRINT_DL_THRESHOLD = 0.80       # DL fingerprint (Siamese)
+FINGERPRINT_MIN_MATCHES = 8           # Traditional fingerprint (SIFT)
 
 # Authentication requirements
 MIN_BIOMETRICS_REQUIRED = 2  # 2-of-3 rule
@@ -70,7 +85,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize biometric recognizers with production-ready algorithms
+# Initialize biometric recognizers with DL (fallback to traditional)
 try:
     face_recognizer = FaceRecognizer(threshold=FACE_SIMILARITY_THRESHOLD)
     logger.info(f"✓ Face recognizer initialized (InsightFace/ArcFace, threshold={FACE_SIMILARITY_THRESHOLD})")
@@ -78,8 +93,31 @@ except Exception as e:
     logger.error(f"✗ Face recognizer failed to initialize: {e}")
     face_recognizer = None
 
-iris_recognizer = IrisRecognizer(threshold=IRIS_HAMMING_THRESHOLD)
-fingerprint_recognizer = FingerprintRecognizer(threshold=FINGERPRINT_MIN_MATCHES)
+# Iris Recognition: DL if available, else traditional
+if IRIS_DL_AVAILABLE:
+    try:
+        iris_recognizer = IrisRecognizerDL(threshold=IRIS_DL_SIMILARITY_THRESHOLD)
+        logger.info(f"✓ Iris recognizer: DEEP LEARNING (CNN, threshold={IRIS_DL_SIMILARITY_THRESHOLD})")
+    except Exception as e:
+        logger.warning(f"DL iris failed: {e}, falling back to traditional")
+        iris_recognizer = IrisRecognizer(threshold=IRIS_HAMMING_THRESHOLD)
+        logger.info(f"✓ Iris recognizer: Traditional (Gabor, threshold={IRIS_HAMMING_THRESHOLD})")
+else:
+    iris_recognizer = IrisRecognizer(threshold=IRIS_HAMMING_THRESHOLD)
+    logger.info(f"✓ Iris recognizer: Traditional (Gabor, threshold={IRIS_HAMMING_THRESHOLD})")
+
+# Fingerprint Recognition: DL if available, else traditional
+if FINGERPRINT_DL_AVAILABLE:
+    try:
+        fingerprint_recognizer = FingerprintRecognizerDL(threshold=FINGERPRINT_DL_THRESHOLD)
+        logger.info(f"✓ Fingerprint recognizer: DEEP LEARNING (Siamese, threshold={FINGERPRINT_DL_THRESHOLD})")
+    except Exception as e:
+        logger.warning(f"DL fingerprint failed: {e}, falling back to traditional")
+        fingerprint_recognizer = FingerprintRecognizer(threshold=FINGERPRINT_MIN_MATCHES)
+        logger.info(f"✓ Fingerprint recognizer: Traditional (SIFT, min_matches={FINGERPRINT_MIN_MATCHES})")
+else:
+    fingerprint_recognizer = FingerprintRecognizer(threshold=FINGERPRINT_MIN_MATCHES)
+    logger.info(f"✓ Fingerprint recognizer: Traditional (SIFT, min_matches={FINGERPRINT_MIN_MATCHES})")
 
 # ============================================================================
 # PYDANTIC MODELS
