@@ -28,6 +28,9 @@ from pydantic import BaseModel, EmailStr, Field
 # Internal modules
 from api.database import db_manager
 from api.liveness_detection import liveness_detector
+
+# Biometric Recognizers (Upgraded to Production Quality)
+from api.face_recognition import FaceRecognizer
 from api.iris_recognition import IrisRecognizer
 from api.fingerprint_recognition import FingerprintRecognizer
 
@@ -38,9 +41,10 @@ from api.fingerprint_recognition import FingerprintRecognizer
 API_VERSION = "2.0.0"
 API_TITLE = "Biometric MFA API"
 
-# Biometric thresholds
-IRIS_THRESHOLD = 0.35  # Hamming distance threshold
-FINGERPRINT_THRESHOLD = 0.85  # Match confidence threshold
+# Biometric thresholds (balanced for HR presentation)
+FACE_SIMILARITY_THRESHOLD = 0.60   # Cosine similarity (InsightFace recommendation)
+IRIS_HAMMING_THRESHOLD = 0.32      # Hamming distance (Daugman's standard)
+FINGERPRINT_MIN_MATCHES = 8        # Minimum SIFT matches (balanced)
 
 # Authentication requirements
 MIN_BIOMETRICS_REQUIRED = 2  # 2-of-3 rule
@@ -65,12 +69,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize biometric recognizers
-iris_recognizer = IrisRecognizer(threshold=IRIS_THRESHOLD)
-fingerprint_recognizer = FingerprintRecognizer(
-    threshold=FINGERPRINT_THRESHOLD,
-    use_deep_learning=False  # Use ORB fallback
-)
+# Initialize biometric recognizers with production-ready algorithms
+try:
+    face_recognizer = FaceRecognizer(threshold=FACE_SIMILARITY_THRESHOLD)
+    logger.info(f"✓ Face recognizer initialized (InsightFace/ArcFace, threshold={FACE_SIMILARITY_THRESHOLD})")
+except Exception as e:
+    logger.error(f"✗ Face recognizer failed to initialize: {e}")
+    face_recognizer = None
+
+iris_recognizer = IrisRecognizer(threshold=IRIS_HAMMING_THRESHOLD)
+fingerprint_recognizer = FingerprintRecognizer(threshold=FINGERPRINT_MIN_MATCHES)
 
 # ============================================================================
 # PYDANTIC MODELS
@@ -449,21 +457,46 @@ async def authenticate_multi_biometric(
                     'reason': liveness_result['reason']
                 })
             else:
-                # Face recognition (simplified - liveness check as proxy)
-                # TODO: Implement full face_recognizer.recognize() when available
-                if user.get("face_registered"):
-                    results.append({
-                        'type': 'face',
-                        'success': True,
-                        'confidence': liveness_result['confidence']
-                    })
-                    print(f"[OK] Face authentication PASSED "
-                          f"(liveness: {liveness_result['confidence']:.2f})")
-                else:
+                # ACTUAL Face Recognition with InsightFace
+                if user.get("face_registered") and face_recognizer is not None:
+                    try:
+                        # Perform face matching
+                        recognized_user, similarity = face_recognizer.recognize(img)
+                        
+                        if recognized_user and recognized_user.lower() == email.lower():
+                            results.append({
+                                'type': 'face',
+                                'success': True,
+                                'confidence': similarity
+                            })
+                            print(f"[OK] Face authentication PASSED "
+                                  f"(similarity: {similarity:.3f}, threshold: {FACE_SIMILARITY_THRESHOLD:.2f})")
+                        else:
+                            results.append({
+                                'type': 'face',
+                                'success': False,
+                                'reason': f'Face not matched (best similarity: {similarity:.3f})'
+                            })
+                            print(f"[FAIL] Face NOT matched. Got: {recognized_user}, "
+                                  f"similarity: {similarity:.3f}")
+                    except Exception as match_error:
+                        logger.error(f"Face matching error: {match_error}")
+                        results.append({
+                            'type': 'face',
+                            'success': False,
+                            'reason': f'Matching error: {str(match_error)}'
+                        })
+                elif not user.get("face_registered"):
                     results.append({
                         'type': 'face',
                         'success': False,
                         'reason': 'Face not registered'
+                    })
+                else:
+                    results.append({
+                        'type': 'face',
+                        'success': False,
+                        'reason': 'Face recognizer not available'
                     })
         
         except Exception as e:

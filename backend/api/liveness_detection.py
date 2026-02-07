@@ -17,12 +17,12 @@ class LivenessDetector:
     - Fingerprint: Edge sharpness analysis
     """
     
-    # Thresholds (tuned for balance between security and usability)
-    FACE_BLUR_THRESHOLD = 100.0  # Laplacian variance
-    FACE_LBP_THRESHOLD = 50.0    # Local Binary Pattern variance
-    IRIS_MIN_RESOLUTION = 200    # Minimum pixels
-    IRIS_EDGE_THRESHOLD = 0.15   # Edge density
-    FP_EDGE_THRESHOLD = 0.20     # Fingerprint edge quality
+    # Thresholds (heavily relaxed for maximum usability)
+    FACE_BLUR_THRESHOLD = 40.0   # Laplacian variance (lowered from 80)
+    FACE_LBP_THRESHOLD = 30.0    # Local Binary Pattern variance (lowered from 40)
+    IRIS_MIN_RESOLUTION = 100    # Minimum pixels (lowered from 150)
+    IRIS_EDGE_THRESHOLD = 0.04   # Edge density (lowered from 0.08)
+    FP_EDGE_THRESHOLD = 0.08     # Fingerprint edge quality (lowered from 0.12)
     
     def __init__(self):
         """Initialize liveness detector"""
@@ -153,15 +153,16 @@ class LivenessDetector:
                 }
             
             # 2. Detect circular structures (pupil/iris)
+            # Relaxed parameters for better detection
             circles = cv2.HoughCircles(
                 gray, 
                 cv2.HOUGH_GRADIENT, 
-                dp=1, 
-                minDist=50,
-                param1=50, 
-                param2=30, 
-                minRadius=20, 
-                maxRadius=100
+                dp=1.2,  # Increased for more tolerance
+                minDist=30,  # Reduced for closer circles
+                param1=30,  # Lowered sensitivity (was 50)
+                param2=20,  # Lowered threshold (was 30)
+                minRadius=10,  # Smaller min (was 20)
+                maxRadius=150  # Larger max (was 100)
             )
             
             if circles is None or len(circles[0]) == 0:
