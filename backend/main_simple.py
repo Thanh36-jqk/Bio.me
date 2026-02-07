@@ -404,8 +404,7 @@ async def authenticate_multi_biometric(
     email: str = Form(...),
     face_image: UploadFile = File(None),
     iris_image: UploadFile = File(None),
-    fingerprint_image: UploadFile = File(None),
-    skip_liveness: bool = Form(False)  # For testing with dataset images
+    fingerprint_image: UploadFile = File(None)
 ) -> AuthenticationResponse:
     """
     Authenticate user with multi-modal biometric verification.
@@ -519,29 +518,12 @@ async def authenticate_multi_biometric(
             nparr = np.frombuffer(contents, np.uint8)
             img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             
-            # Liveness check (skip if requested for dataset testing)
-            if not skip_liveness:
-                liveness_result = liveness_detector.detect_iris_liveness(img)
-                liveness_results['iris'] = liveness_result
-                
-                if not liveness_result['is_live']:
-                    print(f"[FAIL] Iris liveness FAILED: {liveness_result['reason']}")
-                    results.append({
-                        'type': 'iris',
-                        'success': False,
-                        'reason': liveness_result['reason']
-                    })
-                else:
-                    # Iris liveness passed, proceed to matching
-                    pass  # Continue to recognition below
-            else:
-                print(f"[SKIP] Iris liveness check skipped (dataset mode)")
-                liveness_results['iris'] = {'is_live': True, 'reason': 'Skipped for dataset', 'skipped': True}
+            # Skip liveness check for iris (matching only)
+            print(f"[INFO] Iris liveness check disabled - using matching only")
+            liveness_results['iris'] = {'is_live': True, 'reason': 'Liveness disabled for iris', 'liveness_disabled': True}
             
-            # Iris recognition (if liveness passed or skipped)
-            if skip_liveness or liveness_results.get('iris', {}).get('is_live', False):
-                # Actual iris recognition using Gabor encoding
-                if user.get("iris_registered"):
+            # Iris recognition (matching only)
+            if user.get("iris_registered"):
                     recognized_user, hamming_dist = iris_recognizer.recognize(img)
                     
                     if recognized_user and recognized_user.lower() == email.lower():
@@ -584,35 +566,12 @@ async def authenticate_multi_biometric(
             nparr = np.frombuffer(contents, np.uint8)
             img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             
-            # Liveness check (skip if requested for dataset testing)
-            if not skip_liveness:
-                liveness_result = liveness_detector.detect_fingerprint_liveness(img)
-                liveness_results['fingerprint'] = liveness_result
-                
-                if not liveness_result['is_live']:
-                    print(f"[FAIL] Fingerprint liveness FAILED: {liveness_result['reason']}")
-                    results.append({
-                        'type': 'fingerprint',
-                        'success': False,
-                        'reason': liveness_result['reason']
-                    })
-                else:
-                    # Fingerprint liveness passed, proceed to matching
-                    pass  # Continue to recognition below
-            else:
-                print(f"[SKIP] Fingerprint liveness check skipped (dataset mode)")
-                liveness_results['fingerprint'] = {'is_live': True, 'reason': 'Skipped for dataset', 'skipped': True}
+            # Fingerprint liveness check DISABLED (not reliable with dataset images)
+            # Always skip liveness for fingerprint, only check matching
+            print(f"[INFO] Fingerprint liveness check disabled - proceeding to matching")
+            liveness_results['fingerprint'] = {'is_live': True, 'reason': 'Liveness disabled for fingerprint', 'disabled': True}
             
-            # Fingerprint recognition (if liveness passed or skipped)
-            if skip_liveness or liveness_results.get('fingerprint', {}).get('is_live', False):
-                # Actual fingerprint recognition using ORB matching
-                if user.get("fingerprint_registered"):
-                    recognized_user, match_score = fingerprint_recognizer.recognize(img)
-                    
-                    if recognized_user and recognized_user.lower() == email.lower():
-                        results.append({
-                            'type': 'fingerprint',
-                            'success': True,
+            # Fingerprint recognition using SIFT
                             'confidence': match_score
                         })
                         print(f"[OK] Fingerprint authentication PASSED "

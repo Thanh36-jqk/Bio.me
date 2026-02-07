@@ -21,7 +21,6 @@ export default function LoginPage() {
     const [email, setEmail] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [skipLiveness, setSkipLiveness] = useState(false); // NEW: Skip liveness for testing
 
     // Biometric Data
     const webcamRef = useRef<Webcam>(null);
@@ -108,7 +107,6 @@ export default function LoginPage() {
         try {
             const formData = new FormData();
             formData.append('email', email);
-            formData.append('skip_liveness', String(skipLiveness)); // Send skip_liveness flag
 
             if (faceImage) formData.append('face_image', faceImage, 'face.jpg');
             if (irisFile) formData.append('iris_image', irisFile);
@@ -264,36 +262,6 @@ export default function LoginPage() {
                                             <span className="font-medium">{email}</span>
                                         </div>
                                     </div>
-
-                                    {/* Skip Liveness Toggle */}
-                                    <motion.div
-                                        initial={{ opacity: 0, y: -10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        className="flex items-center justify-between p-4 bg-slate-800/50 border border-slate-700 rounded-xl"
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <div>
-                                                <p className="text-white font-medium">Testing Mode</p>
-                                                <p className="text-gray-400 text-sm">Skip liveness detection for dataset images</p>
-                                            </div>
-                                        </div>
-                                        <label className="relative inline-flex items-center cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={skipLiveness}
-                                                onChange={(e) => {
-                                                    setSkipLiveness(e.target.checked);
-                                                    if (e.target.checked) {
-                                                        toast.success('Testing mode enabled');
-                                                    } else {
-                                                        toast.success('Testing mode disabled');
-                                                    }
-                                                }}
-                                                className="sr-only peer"
-                                            />
-                                            <div className="w-14 h-7 bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-amber-500/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-amber-500"></div>
-                                        </label>
-                                    </motion.div>
 
                                     {/* Biometric Collection Grid */}
                                     <div className="grid md:grid-cols-3 gap-6">
