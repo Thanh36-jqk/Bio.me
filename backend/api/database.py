@@ -106,7 +106,6 @@ class MongoDBManager:
         }
         
         result = await self.users_collection.insert_one(user_doc)
-        result = await self.users_collection.insert_one(user_doc)
         logger.info(f"Created user: {email} ({name})")
         return str(result.inserted_id)
     

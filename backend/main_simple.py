@@ -142,7 +142,7 @@ async def register_face(
         print(f"[OK] Created new user fallback: {email}")
     
     # Update biometric status
-    await db_manager.update_biometric_status(email, "face", True)
+    await db_manager.update_user_biometric(email, "face", True)
     
     print(f"[OK] Face registered successfully for {email}")
     
@@ -167,7 +167,7 @@ async def register_iris(
     if not user:
         return {"success": False, "message": "User not found. Please register info first."}
     
-    await db_manager.update_biometric_status(email, "iris", True)
+    await db_manager.update_user_biometric(email, "iris", True)
     
     print(f"[OK] Iris registered successfully for {email}")
     
@@ -192,7 +192,7 @@ async def register_fingerprint(
     if not user:
         return {"success": False, "message": "User not found. Please register info first."}
     
-    await db_manager.update_biometric_status(email, "fingerprint", True)
+    await db_manager.update_user_biometric(email, "fingerprint", True)
     
     print(f"[OK] Fingerprint registered successfully for {email}")
     
