@@ -14,30 +14,7 @@ import toast, { Toaster } from 'react-hot-toast';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-// Animated background particles
-const FloatingParticles = () => (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {[...Array(20)].map((_, i) => (
-            <motion.div
-                key={i}
-                className="absolute w-2 h-2 bg-blue-500/20 rounded-full"
-                initial={{
-                    x: Math.random() * window.innerWidth,
-                    y: Math.random() * window.innerHeight,
-                }}
-                animate={{
-                    x: Math.random() * window.innerWidth,
-                    y: Math.random() * window.innerHeight,
-                }}
-                transition={{
-                    duration: Math.random() * 10 + 20,
-                    repeat: Infinity,
-                    repeatType: 'reverse',
-                }}
-            />
-        ))}
-    </div>
-);
+// Removed floating particles for cleaner look
 
 export default function LoginPage() {
     const [step, setStep] = useState(0); // 0: email, 1: biometrics, 2: processing, 3: result
@@ -187,9 +164,8 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen relative bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 overflow-hidden">
+        <div className="min-h-screen relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-hidden">
             <Toaster position="top-right" />
-            <FloatingParticles />
 
             <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
                 <motion.div
@@ -203,13 +179,11 @@ export default function LoginPage() {
                             initial={{ scale: 0 }}
                             animate={{ scale: 1 }}
                             transition={{ type: 'spring', stiffness: 200 }}
-                            className="inline-flex items-center gap-2 mb-4"
+                            className="mb-4"
                         >
-                            <Sparkles className="w-8 h-8 text-blue-400" />
-                            <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                            <h1 className="text-5xl font-bold text-white">
                                 Biometric Login
                             </h1>
-                            <Sparkles className="w-8 h-8 text-cyan-400" />
                         </motion.div>
                         <p className="text-gray-300 text-lg">Secure 2/3 Multi-Factor Authentication</p>
                     </div>
@@ -230,7 +204,6 @@ export default function LoginPage() {
                                     className="space-y-6"
                                 >
                                     <div className="text-center">
-                                        <Mail className="w-16 h-16 mx-auto text-blue-400 mb-4" />
                                         <h2 className="text-2xl font-bold text-white mb-2">Enter Your Email</h2>
                                         <p className="text-gray-400">Start your secure authentication</p>
                                     </div>
@@ -296,10 +269,9 @@ export default function LoginPage() {
                                     <motion.div
                                         initial={{ opacity: 0, y: -10 }}
                                         animate={{ opacity: 1, y: 0 }}
-                                        className="flex items-center justify-between p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl"
+                                        className="flex items-center justify-between p-4 bg-slate-800/50 border border-slate-700 rounded-xl"
                                     >
                                         <div className="flex items-center gap-3">
-                                            <Settings className="w-5 h-5 text-amber-400" />
                                             <div>
                                                 <p className="text-white font-medium">Testing Mode</p>
                                                 <p className="text-gray-400 text-sm">Skip liveness detection for dataset images</p>
@@ -331,8 +303,7 @@ export default function LoginPage() {
                                             className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4"
                                         >
                                             <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    <Camera className="w-6 h-6 text-blue-400" />
+                                                <div>
                                                     <h3 className="text-white font-semibold">Face</h3>
                                                 </div>
                                                 <StatusIcon status={biometricStatus.face} />
@@ -380,8 +351,7 @@ export default function LoginPage() {
                                             className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4"
                                         >
                                             <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    <Eye className="w-6 h-6 text-cyan-400" />
+                                                <div>
                                                     <h3 className="text-white font-semibold">Iris</h3>
                                                 </div>
                                                 <StatusIcon status={biometricStatus.iris} />
@@ -434,8 +404,7 @@ export default function LoginPage() {
                                             className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4"
                                         >
                                             <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    <Fingerprint className="w-6 h-6 text-purple-400" />
+                                                <div>
                                                     <h3 className="text-white font-semibold">Fingerprint</h3>
                                                 </div>
                                                 <StatusIcon status={biometricStatus.fingerprint} />
