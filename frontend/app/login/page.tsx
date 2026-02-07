@@ -78,7 +78,7 @@ export default function LoginPage() {
             return;
         }
 
-        toast.success('Email verified! Please provide biometrics');
+        toast.success('Email verified. Please provide biometrics.');
         setStep(1);
     };
 
@@ -92,7 +92,7 @@ export default function LoginPage() {
                     .then(blob => {
                         setFaceImage(blob);
                         setBiometricStatus(prev => ({ ...prev, face: 'captured' }));
-                        toast.success('Face captured successfully!');
+                        toast.success('Face captured successfully');
                     });
             }
         }
@@ -104,11 +104,11 @@ export default function LoginPage() {
             if (type === 'iris') {
                 setIrisFile(file);
                 setBiometricStatus(prev => ({ ...prev, iris: 'captured' }));
-                toast.success('Iris image uploaded!');
+                toast.success('Iris image uploaded');
             } else {
                 setFingerprintFile(file);
                 setBiometricStatus(prev => ({ ...prev, fingerprint: 'captured' }));
-                toast.success('Fingerprint image uploaded!');
+                toast.success('Fingerprint image uploaded');
             }
         }
     };
@@ -144,7 +144,7 @@ export default function LoginPage() {
             setAuthResult(response.data);
 
             if (response.data.success) {
-                toast.success('Authentication successful! 🎉');
+                toast.success('Authentication successful');
                 setStep(3);
             } else {
                 toast.error('Authentication failed');
@@ -311,9 +311,11 @@ export default function LoginPage() {
                                                 checked={skipLiveness}
                                                 onChange={(e) => {
                                                     setSkipLiveness(e.target.checked);
-                                                    toast(e.target.checked ? 'Testing mode enabled' : 'Testing mode disabled', {
-                                                        icon: e.target.checked ? '🧪' : '🔒',
-                                                    });
+                                                    if (e.target.checked) {
+                                                        toast.success('Testing mode enabled');
+                                                    } else {
+                                                        toast.success('Testing mode disabled');
+                                                    }
                                                 }}
                                                 className="sr-only peer"
                                             />
