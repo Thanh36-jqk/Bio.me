@@ -19,6 +19,7 @@ from typing import Optional, List, Dict, Any
 import uvicorn
 import cv2
 import numpy as np
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form
