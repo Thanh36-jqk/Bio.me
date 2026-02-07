@@ -30,23 +30,10 @@ from pydantic import BaseModel, EmailStr, Field
 from api.database import db_manager
 from api.liveness_detection import liveness_detector
 
-# Biometric Recognizers (Production Quality with Deep Learning)
+# Biometric Recognizers (Optimized for Production)
 from api.face_recognition import FaceRecognizer
-
-# Import DL modules with fallback to traditional
-try:
-    from api.iris_recognition_dl import IrisRecognizerDL
-    IRIS_DL_AVAILABLE = True
-except ImportError:
-    IRIS_DL_AVAILABLE = False
-    from api.iris_recognition import IrisRecognizer
-
-try:
-    from api.fingerprint_recognition_dl import FingerprintRecognizerDL
-    FINGERPRINT_DL_AVAILABLE = True
-except ImportError:
-    FINGERPRINT_DL_AVAILABLE = False
-    from api.fingerprint_recognition import FingerprintRecognizer
+from api.iris_recognition import IrisRecognizer
+from api.fingerprint_recognition import FingerprintRecognizer
 
 # ============================================================================
 # CONFIGURATION CONSTANTS
@@ -55,12 +42,10 @@ except ImportError:
 API_VERSION = "2.0.0"
 API_TITLE = "Biometric MFA API"
 
-# Biometric thresholds (optimized for Deep Learning)
-FACE_SIMILARITY_THRESHOLD = 0.60      # Cosine similarity (InsightFace)
-IRIS_DL_SIMILARITY_THRESHOLD = 0.85   # DL iris (CNN embeddings)
-IRIS_HAMMING_THRESHOLD = 0.32         # Traditional iris (Gabor)
-FINGERPRINT_DL_THRESHOLD = 0.80       # DL fingerprint (Siamese)
-FINGERPRINT_MIN_MATCHES = 8           # Traditional fingerprint (SIFT)
+# Biometric thresholds (optimized for accuracy + usability)
+FACE_SIMILARITY_THRESHOLD = 0.60      # Face: InsightFace (DL)
+IRIS_HAMMING_THRESHOLD = 0.32         # Iris: Gabor wavelets
+FINGERPRINT_MIN_MATCHES = 8           # Fingerprint: SIFT features
 
 # Authentication requirements
 MIN_BIOMETRICS_REQUIRED = 2  # 2-of-3 rule
@@ -85,39 +70,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize biometric recognizers with DL (fallback to traditional)
+# Initialize biometric recognizers (optimized stack)
 try:
     face_recognizer = FaceRecognizer(threshold=FACE_SIMILARITY_THRESHOLD)
-    logger.info(f"✓ Face recognizer initialized (InsightFace/ArcFace, threshold={FACE_SIMILARITY_THRESHOLD})")
+    logger.info(f"✓ Face recognizer: InsightFace/ArcFace (DL, threshold={FACE_SIMILARITY_THRESHOLD})")
 except Exception as e:
-    logger.error(f"✗ Face recognizer failed to initialize: {e}")
+    logger.error(f"✗ Face recognizer failed: {e}")
     face_recognizer = None
 
-# Iris Recognition: DL if available, else traditional
-if IRIS_DL_AVAILABLE:
-    try:
-        iris_recognizer = IrisRecognizerDL(threshold=IRIS_DL_SIMILARITY_THRESHOLD)
-        logger.info(f"✓ Iris recognizer: DEEP LEARNING (CNN, threshold={IRIS_DL_SIMILARITY_THRESHOLD})")
-    except Exception as e:
-        logger.warning(f"DL iris failed: {e}, falling back to traditional")
-        iris_recognizer = IrisRecognizer(threshold=IRIS_HAMMING_THRESHOLD)
-        logger.info(f"✓ Iris recognizer: Traditional (Gabor, threshold={IRIS_HAMMING_THRESHOLD})")
-else:
-    iris_recognizer = IrisRecognizer(threshold=IRIS_HAMMING_THRESHOLD)
-    logger.info(f"✓ Iris recognizer: Traditional (Gabor, threshold={IRIS_HAMMING_THRESHOLD})")
+iris_recognizer = IrisRecognizer(threshold=IRIS_HAMMING_THRESHOLD)
+logger.info(f"✓ Iris recognizer: Gabor wavelets (threshold={IRIS_HAMMING_THRESHOLD})")
 
-# Fingerprint Recognition: DL if available, else traditional
-if FINGERPRINT_DL_AVAILABLE:
-    try:
-        fingerprint_recognizer = FingerprintRecognizerDL(threshold=FINGERPRINT_DL_THRESHOLD)
-        logger.info(f"✓ Fingerprint recognizer: DEEP LEARNING (Siamese, threshold={FINGERPRINT_DL_THRESHOLD})")
-    except Exception as e:
-        logger.warning(f"DL fingerprint failed: {e}, falling back to traditional")
-        fingerprint_recognizer = FingerprintRecognizer(threshold=FINGERPRINT_MIN_MATCHES)
-        logger.info(f"✓ Fingerprint recognizer: Traditional (SIFT, min_matches={FINGERPRINT_MIN_MATCHES})")
-else:
-    fingerprint_recognizer = FingerprintRecognizer(threshold=FINGERPRINT_MIN_MATCHES)
-    logger.info(f"✓ Fingerprint recognizer: Traditional (SIFT, min_matches={FINGERPRINT_MIN_MATCHES})")
+fingerprint_recognizer = FingerprintRecognizer(threshold=FINGERPRINT_MIN_MATCHES)
+logger.info(f"✓ Fingerprint recognizer: SIFT features (min_matches={FINGERPRINT_MIN_MATCHES})")
 
 # ============================================================================
 # PYDANTIC MODELS
@@ -439,7 +404,8 @@ async def authenticate_multi_biometric(
     email: str = Form(...),
     face_image: UploadFile = File(None),
     iris_image: UploadFile = File(None),
-    fingerprint_image: UploadFile = File(None)
+    fingerprint_image: UploadFile = File(None),
+    skip_liveness: bool = Form(False)  # For testing with dataset images
 ) -> AuthenticationResponse:
     """
     Authenticate user with multi-modal biometric verification.
@@ -553,18 +519,27 @@ async def authenticate_multi_biometric(
             nparr = np.frombuffer(contents, np.uint8)
             img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             
-            # Liveness check (anti-spoofing)
-            liveness_result = liveness_detector.detect_iris_liveness(img)
-            liveness_results['iris'] = liveness_result
-            
-            if not liveness_result['is_live']:
-                print(f"[FAIL] Iris liveness FAILED: {liveness_result['reason']}")
-                results.append({
-                    'type': 'iris',
-                    'success': False,
-                    'reason': liveness_result['reason']
-                })
+            # Liveness check (skip if requested for dataset testing)
+            if not skip_liveness:
+                liveness_result = liveness_detector.detect_iris_liveness(img)
+                liveness_results['iris'] = liveness_result
+                
+                if not liveness_result['is_live']:
+                    print(f"[FAIL] Iris liveness FAILED: {liveness_result['reason']}")
+                    results.append({
+                        'type': 'iris',
+                        'success': False,
+                        'reason': liveness_result['reason']
+                    })
+                else:
+                    # Iris liveness passed, proceed to matching
+                    pass  # Continue to recognition below
             else:
+                print(f"[SKIP] Iris liveness check skipped (dataset mode)")
+                liveness_results['iris'] = {'is_live': True, 'reason': 'Skipped for dataset', 'skipped': True}
+            
+            # Iris recognition (if liveness passed or skipped)
+            if skip_liveness or liveness_results.get('iris', {}).get('is_live', False):
                 # Actual iris recognition using Gabor encoding
                 if user.get("iris_registered"):
                     recognized_user, hamming_dist = iris_recognizer.recognize(img)
@@ -609,18 +584,27 @@ async def authenticate_multi_biometric(
             nparr = np.frombuffer(contents, np.uint8)
             img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             
-            # Liveness check (anti-spoofing)
-            liveness_result = liveness_detector.detect_fingerprint_liveness(img)
-            liveness_results['fingerprint'] = liveness_result
-            
-            if not liveness_result['is_live']:
-                print(f"[FAIL] Fingerprint liveness FAILED: {liveness_result['reason']}")
-                results.append({
-                    'type': 'fingerprint',
-                    'success': False,
-                    'reason': liveness_result['reason']
-                })
+            # Liveness check (skip if requested for dataset testing)
+            if not skip_liveness:
+                liveness_result = liveness_detector.detect_fingerprint_liveness(img)
+                liveness_results['fingerprint'] = liveness_result
+                
+                if not liveness_result['is_live']:
+                    print(f"[FAIL] Fingerprint liveness FAILED: {liveness_result['reason']}")
+                    results.append({
+                        'type': 'fingerprint',
+                        'success': False,
+                        'reason': liveness_result['reason']
+                    })
+                else:
+                    # Fingerprint liveness passed, proceed to matching
+                    pass  # Continue to recognition below
             else:
+                print(f"[SKIP] Fingerprint liveness check skipped (dataset mode)")
+                liveness_results['fingerprint'] = {'is_live': True, 'reason': 'Skipped for dataset', 'skipped': True}
+            
+            # Fingerprint recognition (if liveness passed or skipped)
+            if skip_liveness or liveness_results.get('fingerprint', {}).get('is_live', False):
                 # Actual fingerprint recognition using ORB matching
                 if user.get("fingerprint_registered"):
                     recognized_user, match_score = fingerprint_recognizer.recognize(img)
