@@ -18,6 +18,14 @@ from api.database import db_manager
 # Liveness Detection
 from api.liveness_detection import liveness_detector
 
+# Biometric Recognizers
+from api.iris_recognition import IrisRecognizer
+from api.fingerprint_recognition import FingerprintRecognizer
+
+# Initialize recognizers
+iris_recognizer = IrisRecognizer(threshold=0.35)
+fingerprint_recognizer = FingerprintRecognizer(threshold=0.85, use_deep_learning=False)
+
 app = FastAPI(title="Biometric MFA API", version="2.0.0")
 
 # CORS
@@ -325,8 +333,8 @@ async def authenticate_multi_biometric(
                 print(f"[FAIL] Face liveness FAILED: {liveness_result['reason']}")
                 results.append({'type': 'face', 'success': False, 'reason': liveness_result['reason']})
             else:
-                # TODO: Actual face recognition here
-                # For now, mark as success if liveness passed and user has face registered
+                # Face recognition (simplified - liveness check as proxy)
+                # TODO: Implement actual face_recognizer.recognize() when face recognition module is ready
                 if user.get("face_registered"):
                     results.append({'type': 'face', 'success': True, 'confidence': liveness_result['confidence']})
                     print(f"[OK] Face authentication PASSED (liveness: {liveness_result['confidence']:.2f})")
@@ -353,9 +361,16 @@ async def authenticate_multi_biometric(
                 print(f"[FAIL] Iris liveness FAILED: {liveness_result['reason']}")
                 results.append({'type': 'iris', 'success': False, 'reason': liveness_result['reason']})
             else:
+                # Actual iris recognition
                 if user.get("iris_registered"):
-                    results.append({'type': 'iris', 'success': True, 'confidence': liveness_result['confidence']})
-                    print(f"[OK] Iris authentication PASSED (liveness: {liveness_result['confidence']:.2f})")
+                    recognized_user, hamming_dist = iris_recognizer.recognize(img)
+                    if recognized_user and recognized_user.lower() == email.lower():
+                        confidence = 1.0 - hamming_dist  # Convert distance to confidence
+                        results.append({'type': 'iris', 'success': True, 'confidence': confidence})
+                        print(f"[OK] Iris authentication PASSED (distance: {hamming_dist:.3f}, confidence: {confidence:.2f})")
+                    else:
+                        results.append({'type': 'iris', 'success': False, 'reason': f'Iris not matched (best distance: {hamming_dist:.3f})'})
+                        print(f"[FAIL] Iris NOT matched. Got: {recognized_user}, distance: {hamming_dist:.3f}")
                 else:
                     results.append({'type': 'iris', 'success': False, 'reason': 'Iris not registered'})
                     
@@ -379,9 +394,15 @@ async def authenticate_multi_biometric(
                 print(f"[FAIL] Fingerprint liveness FAILED: {liveness_result['reason']}")
                 results.append({'type': 'fingerprint', 'success': False, 'reason': liveness_result['reason']})
             else:
+                # Actual fingerprint recognition
                 if user.get("fingerprint_registered"):
-                    results.append({'type': 'fingerprint', 'success': True, 'confidence': liveness_result['confidence']})
-                    print(f"[OK] Fingerprint authentication PASSED (liveness: {liveness_result['confidence']:.2f})")
+                    recognized_user, match_score = fingerprint_recognizer.recognize(img)
+                    if recognized_user and recognized_user.lower() == email.lower():
+                        results.append({'type': 'fingerprint', 'success': True, 'confidence': match_score})
+                        print(f"[OK] Fingerprint authentication PASSED (score: {match_score:.2f})")
+                    else:
+                        results.append({'type': 'fingerprint', 'success': False, 'reason': f'Fingerprint not matched (best score: {match_score:.2f})'})
+                        print(f"[FAIL] Fingerprint NOT matched. Got: {recognized_user}, score: {match_score:.2f}")
                 else:
                     results.append({'type': 'fingerprint', 'success': False, 'reason': 'Fingerprint not registered'})
                     
