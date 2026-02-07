@@ -53,7 +53,15 @@ class MongoDBManager:
             self.users_collection = self.db['users']
             
             # Create indexes
-            await self.users_collection.create_index("username", unique=True)
+            # Drop old username index if it exists (to fix E11000 error)
+            try:
+                await self.users_collection.drop_index("username_1")
+                logger.info("Dropped old username index")
+            except Exception:
+                pass  # Index might not exist
+            
+            # Create new unique index on email
+            await self.users_collection.create_index("email", unique=True)
             
             logger.info("Connected to MongoDB successfully")
         except Exception as e:
