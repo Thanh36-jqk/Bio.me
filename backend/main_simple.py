@@ -50,8 +50,8 @@ class AuthenticationResponse(BaseModel):
 async def startup():
     """Initialize database connection"""
     await db_manager.connect()
-    print("✓ MongoDB connected")
-    print("✓ Backend started successfully")
+    print("[OK] MongoDB connected")
+    print("[OK] Backend started successfully")
     print("="*60)
     print("="*60)
     print("BIOMETRIC MFA BACKEND SERVER - v1.2 (SSL CERTIFI FIX)")
@@ -131,20 +131,20 @@ async def register_face(
         email: User email identifier
         images: List of face images (5-10 recommended)
     """
-    print(f"📸 Registering face for user: {email}")
-    print(f"   Received {len(images)} face images")
+    print(f"[INFO] Registering face for user: {email}")
+    print(f"       Received {len(images)} face images")
     
     # Check if user exists, create if not (legacy support, but better to use /register/user first)
     user = await db_manager.get_user(email)
     if not user:
          # Fallback: create with dummy name/age if not exists (shouldn't happen in new flow)
         await db_manager.create_user(email, "Unknown", 18)
-        print(f"✓ Created new user fallback: {email}")
+        print(f"[OK] Created new user fallback: {email}")
     
     # Update biometric status
     await db_manager.update_biometric_status(email, "face", True)
     
-    print(f"✓ Face registered successfully for {email}")
+    print(f"[OK] Face registered successfully for {email}")
     
     return {
         "success": True,
@@ -160,8 +160,8 @@ async def register_iris(
     images: list[UploadFile] = File(...)
 ):
     """Register user's iris biometric"""
-    print(f"👁️ Registering iris for user: {email}")
-    print(f"   Received {len(images)} iris images")
+    print(f"[INFO] Registering iris for user: {email}")
+    print(f"       Received {len(images)} iris images")
     
     user = await db_manager.get_user(email)
     if not user:
@@ -169,7 +169,7 @@ async def register_iris(
     
     await db_manager.update_biometric_status(email, "iris", True)
     
-    print(f"✓ Iris registered successfully for {email}")
+    print(f"[OK] Iris registered successfully for {email}")
     
     return {
         "success": True,
@@ -185,8 +185,8 @@ async def register_fingerprint(
     images: list[UploadFile] = File(...)
 ):
     """Register user's fingerprint biometric"""
-    print(f"👆 Registering fingerprint for user: {email}")
-    print(f"   Received {len(images)} fingerprint images")
+    print(f"[INFO] Registering fingerprint for user: {email}")
+    print(f"       Received {len(images)} fingerprint images")
     
     user = await db_manager.get_user(email)
     if not user:
@@ -194,7 +194,7 @@ async def register_fingerprint(
     
     await db_manager.update_biometric_status(email, "fingerprint", True)
     
-    print(f"✓ Fingerprint registered successfully for {email}")
+    print(f"[OK] Fingerprint registered successfully for {email}")
     
     return {
         "success": True,
@@ -207,7 +207,7 @@ async def register_fingerprint(
 @app.post("/authenticate/face", response_model=AuthenticationResponse)
 async def authenticate_face(username: str = Form(...), image: UploadFile = File(...)):
     """Authenticate using face"""
-    print(f"🔐 Authenticating face for: {username}")
+    print(f"[AUTH] Authenticating face for: {username}")
     
     user = await db_manager.get_user(username)
     if not user:
@@ -234,7 +234,7 @@ async def authenticate_face(username: str = Form(...), image: UploadFile = File(
 @app.post("/authenticate/iris", response_model=AuthenticationResponse)
 async def authenticate_iris(username: str = Form(...), image: UploadFile = File(...)):
     """Authenticate using iris"""
-    print(f"🔐 Authenticating iris for: {username}")
+    print(f"[AUTH] Authenticating iris for: {username}")
     
     user = await db_manager.get_user(username)
     if not user:
@@ -260,7 +260,7 @@ async def authenticate_iris(username: str = Form(...), image: UploadFile = File(
 @app.post("/authenticate/fingerprint", response_model=AuthenticationResponse)
 async def authenticate_fingerprint(username: str = Form(...), image: UploadFile = File(...)):
     """Authenticate using fingerprint"""
-    print(f"🔐 Authenticating fingerprint for: {username}")
+    print(f"[AUTH] Authenticating fingerprint for: {username}")
     
     user = await db_manager.get_user(username)
     if not user:
@@ -295,7 +295,7 @@ async def authenticate_multi_biometric(
     Requires at least 2 out of 3 biometrics to pass
     Includes liveness detection for anti-spoofing
     """
-    print(f"🔐 Multi-biometric authentication for: {email}")
+    print(f"[AUTH] Multi-biometric authentication for: {email}")
     
     # Check user exists
     user = await db_manager.get_user(email)
@@ -322,19 +322,19 @@ async def authenticate_multi_biometric(
             liveness_results['face'] = liveness_result
             
             if not liveness_result['is_live']:
-                print(f"❌ Face liveness FAILED: {liveness_result['reason']}")
+                print(f"[FAIL] Face liveness FAILED: {liveness_result['reason']}")
                 results.append({'type': 'face', 'success': False, 'reason': liveness_result['reason']})
             else:
                 # TODO: Actual face recognition here
                 # For now, mark as success if liveness passed and user has face registered
                 if user.get("face_registered"):
                     results.append({'type': 'face', 'success': True, 'confidence': liveness_result['confidence']})
-                    print(f"✓ Face authentication PASSED (liveness: {liveness_result['confidence']:.2f})")
+                    print(f"[OK] Face authentication PASSED (liveness: {liveness_result['confidence']:.2f})")
                 else:
                     results.append({'type': 'face', 'success': False, 'reason': 'Face not registered'})
                     
         except Exception as e:
-            print(f"❌ Face authentication error: {e}")
+            print(f"[ERROR] Face authentication error: {e}")
             results.append({'type': 'face', 'success': False, 'reason': str(e)})
             liveness_results['face'] = {'is_live': False, 'reason': f'Error: {str(e)}'}
     
@@ -350,17 +350,17 @@ async def authenticate_multi_biometric(
             liveness_results['iris'] = liveness_result
             
             if not liveness_result['is_live']:
-                print(f"❌ Iris liveness FAILED: {liveness_result['reason']}")
+                print(f"[FAIL] Iris liveness FAILED: {liveness_result['reason']}")
                 results.append({'type': 'iris', 'success': False, 'reason': liveness_result['reason']})
             else:
                 if user.get("iris_registered"):
                     results.append({'type': 'iris', 'success': True, 'confidence': liveness_result['confidence']})
-                    print(f"✓ Iris authentication PASSED (liveness: {liveness_result['confidence']:.2f})")
+                    print(f"[OK] Iris authentication PASSED (liveness: {liveness_result['confidence']:.2f})")
                 else:
                     results.append({'type': 'iris', 'success': False, 'reason': 'Iris not registered'})
                     
         except Exception as e:
-            print(f"❌ Iris authentication error: {e}")
+            print(f"[ERROR] Iris authentication error: {e}")
             results.append({'type': 'iris', 'success': False, 'reason': str(e)})
             liveness_results['iris'] = {'is_live': False, 'reason': f'Error: {str(e)}'}
     
@@ -376,17 +376,17 @@ async def authenticate_multi_biometric(
             liveness_results['fingerprint'] = liveness_result
             
             if not liveness_result['is_live']:
-                print(f"❌ Fingerprint liveness FAILED: {liveness_result['reason']}")
+                print(f"[FAIL] Fingerprint liveness FAILED: {liveness_result['reason']}")
                 results.append({'type': 'fingerprint', 'success': False, 'reason': liveness_result['reason']})
             else:
                 if user.get("fingerprint_registered"):
                     results.append({'type': 'fingerprint', 'success': True, 'confidence': liveness_result['confidence']})
-                    print(f"✓ Fingerprint authentication PASSED (liveness: {liveness_result['confidence']:.2f})")
+                    print(f"[OK] Fingerprint authentication PASSED (liveness: {liveness_result['confidence']:.2f})")
                 else:
                     results.append({'type': 'fingerprint', 'success': False, 'reason': 'Fingerprint not registered'})
                     
         except Exception as e:
-            print(f"❌ Fingerprint authentication error: {e}")
+            print(f"[ERROR] Fingerprint authentication error: {e}")
             results.append({'type': 'fingerprint', 'success': False, 'reason': str(e)})
             liveness_results['fingerprint'] = {'is_live': False, 'reason': f'Error: {str(e)}'}
     
@@ -396,7 +396,7 @@ async def authenticate_multi_biometric(
     
     # 2/3 Rule: Need at least 2 out of 3 to pass
     if passed_count >= 2:
-        print(f"✅ AUTHENTICATION SUCCESS: {passed_count}/{total_count} biometrics passed")
+        print(f"[SUCCESS] AUTHENTICATION SUCCESS: {passed_count}/{total_count} biometrics passed")
         return AuthenticationResponse(
             success=True,
             email=email,
@@ -405,7 +405,7 @@ async def authenticate_multi_biometric(
             liveness_checks=liveness_results
         )
     else:
-        print(f"❌ AUTHENTICATION FAILED: {passed_count}/{total_count} biometrics passed (need 2+)")
+        print(f"[FAILED] AUTHENTICATION FAILED: {passed_count}/{total_count} biometrics passed (need 2+)")
         failed_reasons = [r.get('reason', 'Unknown') for r in results if not r['success']]
         return AuthenticationResponse(
             success=False,
