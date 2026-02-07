@@ -4,23 +4,61 @@ import { useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import axios from 'axios';
 import Webcam from 'react-webcam';
-import { Camera, Upload, Check, X, Mail, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+    Camera, Upload, Check, X, Mail, ShieldCheck, ShieldAlert,
+    Eye, Fingerprint, Loader2, AlertCircle, CheckCircle2,
+    ArrowLeft, Settings, Sparkles
+} from 'lucide-react';
+import toast, { Toaster } from 'react-hot-toast';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+// Animated background particles
+const FloatingParticles = () => (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {[...Array(20)].map((_, i) => (
+            <motion.div
+                key={i}
+                className="absolute w-2 h-2 bg-blue-500/20 rounded-full"
+                initial={{
+                    x: Math.random() * window.innerWidth,
+                    y: Math.random() * window.innerHeight,
+                }}
+                animate={{
+                    x: Math.random() * window.innerWidth,
+                    y: Math.random() * window.innerHeight,
+                }}
+                transition={{
+                    duration: Math.random() * 10 + 20,
+                    repeat: Infinity,
+                    repeatType: 'reverse',
+                }}
+            />
+        ))}
+    </div>
+);
 
 export default function LoginPage() {
     const [step, setStep] = useState(0); // 0: email, 1: biometrics, 2: processing, 3: result
     const [email, setEmail] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [skipLiveness, setSkipLiveness] = useState(false); // NEW: Skip liveness for testing
 
     // Biometric Data
     const webcamRef = useRef<Webcam>(null);
     const [faceImage, setFaceImage] = useState<Blob | null>(null);
     const [facePreview, setFacePreview] = useState<string | null>(null);
-
     const [irisFile, setIrisFile] = useState<File | null>(null);
     const [fingerprintFile, setFingerprintFile] = useState<File | null>(null);
+
+    // Biometric Status
+    const [biometricStatus, setBiometricStatus] = useState({
+        face: 'pending', // pending, captured, processing, success, failed
+        iris: 'pending',
+        fingerprint: 'pending',
+    });
 
     // Auth Result
     const [authResult, setAuthResult] = useState<{
@@ -28,6 +66,7 @@ export default function LoginPage() {
         message: string;
         passed_biometrics: number;
         liveness_checks?: any;
+        analysis_report?: string;
     } | null>(null);
 
     const handleEmailSubmit = async (e: React.FormEvent) => {
@@ -35,12 +74,11 @@ export default function LoginPage() {
         setError('');
 
         if (!email.includes('@')) {
-            setError('Please enter a valid email');
+            toast.error('Please enter a valid email address');
             return;
         }
 
-        // Skip user check API call for now to avoid complexity, 
-        // rely on main auth endpoint to check user existence
+        toast.success('Email verified! Please provide biometrics');
         setStep(1);
     };
 
@@ -49,10 +87,13 @@ export default function LoginPage() {
             const imageSrc = webcamRef.current.getScreenshot();
             if (imageSrc) {
                 setFacePreview(imageSrc);
-                // Convert base64 to blob
                 fetch(imageSrc)
                     .then(res => res.blob())
-                    .then(blob => setFaceImage(blob));
+                    .then(blob => {
+                        setFaceImage(blob);
+                        setBiometricStatus(prev => ({ ...prev, face: 'captured' }));
+                        toast.success('Face captured successfully!');
+                    });
             }
         }
     }, [webcamRef]);
@@ -60,30 +101,37 @@ export default function LoginPage() {
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'iris' | 'fingerprint') => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
-            if (type === 'iris') setIrisFile(file);
-            else setFingerprintFile(file);
+            if (type === 'iris') {
+                setIrisFile(file);
+                setBiometricStatus(prev => ({ ...prev, iris: 'captured' }));
+                toast.success('Iris image uploaded!');
+            } else {
+                setFingerprintFile(file);
+                setBiometricStatus(prev => ({ ...prev, fingerprint: 'captured' }));
+                toast.success('Fingerprint image uploaded!');
+            }
         }
     };
 
     const handleLogin = async () => {
-        // Count provided biometrics
         let count = 0;
         if (faceImage) count++;
         if (irisFile) count++;
         if (fingerprintFile) count++;
 
         if (count < 2) {
-            setError('Please provide at least 2 biometrics to login (2/3 Rule)');
+            toast.error('Please provide at least 2 biometrics (2/3 Rule)');
             return;
         }
 
         setLoading(true);
         setError('');
-        setStep(2); // Processing
+        setStep(2);
 
         try {
             const formData = new FormData();
             formData.append('email', email);
+            formData.append('skip_liveness', String(skipLiveness)); // Send skip_liveness flag
 
             if (faceImage) formData.append('face_image', faceImage, 'face.jpg');
             if (irisFile) formData.append('iris_image', irisFile);
@@ -94,219 +142,512 @@ export default function LoginPage() {
             });
 
             setAuthResult(response.data);
-            setStep(3); // Result
+
+            if (response.data.success) {
+                toast.success('Authentication successful! 🎉');
+                setStep(3);
+            } else {
+                toast.error('Authentication failed');
+                setStep(3);
+            }
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Authentication failed. Please try again.');
+            const errorMsg = err.response?.data?.message || 'Authentication failed. Please try again.';
+            toast.error(errorMsg);
+            setError(errorMsg);
             setStep(1);
         } finally {
             setLoading(false);
         }
     };
 
+    const resetForm = () => {
+        setStep(0);
+        setEmail('');
+        setFaceImage(null);
+        setFacePreview(null);
+        setIrisFile(null);
+        setFingerprintFile(null);
+        setAuthResult(null);
+        setError('');
+        setBiometricStatus({ face: 'pending', iris: 'pending', fingerprint: 'pending' });
+    };
+
+    // Status Icon Component
+    const StatusIcon = ({ status }: { status: string }) => {
+        switch (status) {
+            case 'captured':
+                return <CheckCircle2 className="w-5 h-5 text-green-500" />;
+            case 'failed':
+                return <AlertCircle className="w-5 h-5 text-red-500" />;
+            case 'processing':
+                return <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />;
+            default:
+                return <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />;
+        }
+    };
+
     return (
-        <div className="min-h-screen relative overflow-hidden bg-[#0A0A0A] text-white selection:bg-purple-500/30">
-            {/* Background Effects */}
-            <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10">
-                <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-blue-600/10 blur-[120px]" />
-                <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-purple-600/10 blur-[120px]" />
-            </div>
+        <div className="min-h-screen relative bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 overflow-hidden">
+            <Toaster position="top-right" />
+            <FloatingParticles />
 
-            <div className="container mx-auto px-4 py-8">
-                <div className="mb-8">
-                    <Link href="/" className="text-gray-400 hover:text-white transition-colors flex items-center gap-2">
-                        ← Back to Home
-                    </Link>
-                </div>
-
-                <div className="max-w-xl mx-auto">
-                    <div className="text-center mb-10">
-                        <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400 mb-4">
-                            Biometric Login
-                        </h1>
-                        <p className="text-gray-400 text-lg">
-                            Secure 2/3 Multi-Factor Authentication
-                        </p>
+            <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="w-full max-w-5xl"
+                >
+                    {/* Header */}
+                    <div className="text-center mb-8">
+                        <motion.div
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            transition={{ type: 'spring', stiffness: 200 }}
+                            className="inline-flex items-center gap-2 mb-4"
+                        >
+                            <Sparkles className="w-8 h-8 text-blue-400" />
+                            <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                                Biometric Login
+                            </h1>
+                            <Sparkles className="w-8 h-8 text-cyan-400" />
+                        </motion.div>
+                        <p className="text-gray-300 text-lg">Secure 2/3 Multi-Factor Authentication</p>
                     </div>
 
-                    <div className="bg-gray-900/50 backdrop-blur-xl border border-white/5 rounded-2xl p-8 shadow-2xl">
-                        {error && (
-                            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 flex items-center gap-2">
-                                <ShieldAlert size={18} />
-                                {error}
-                            </div>
-                        )}
+                    {/* Main Card */}
+                    <motion.div
+                        layout
+                        className="bg-white/10 backdrop-blur-xl rounded-3xl border border-white/20 shadow-2xl p-8"
+                    >
+                        <AnimatePresence mode="wait">
+                            {/* Step 0: Email Input */}
+                            {step === 0 && (
+                                <motion.div
+                                    key="email-step"
+                                    initial={{ opacity: 0, x: -20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: 20 }}
+                                    className="space-y-6"
+                                >
+                                    <div className="text-center">
+                                        <Mail className="w-16 h-16 mx-auto text-blue-400 mb-4" />
+                                        <h2 className="text-2xl font-bold text-white mb-2">Enter Your Email</h2>
+                                        <p className="text-gray-400">Start your secure authentication</p>
+                                    </div>
 
-                        {/* Step 0: Email Input */}
-                        {step === 0 && (
-                            <form onSubmit={handleEmailSubmit} className="space-y-6">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-400 mb-2">Email Address</label>
-                                    <div className="relative">
-                                        <Mail className="absolute left-4 top-3.5 text-gray-500" size={20} />
-                                        <input
-                                            type="email"
-                                            value={email}
-                                            onChange={(e) => setEmail(e.target.value)}
-                                            className="w-full bg-gray-950 border border-gray-800 rounded-xl py-3 pl-12 pr-4 text-white focus:outline-none focus:border-blue-500 transition-colors"
-                                            placeholder="john@example.com"
-                                            required
+                                    <form onSubmit={handleEmailSubmit} className="space-y-4">
+                                        <div>
+                                            <input
+                                                type="email"
+                                                placeholder="your.email@example.com"
+                                                value={email}
+                                                onChange={(e) => setEmail(e.target.value)}
+                                                className="w-full px-6 py-4 bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                                required
+                                            />
+                                        </div>
+
+                                        <motion.button
+                                            whileHover={{ scale: 1.02 }}
+                                            whileTap={{ scale: 0.98 }}
+                                            type="submit"
+                                            className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-semibold py-4 rounded-xl transition-all shadow-lg shadow-blue-500/50"
+                                        >
+                                            Continue
+                                        </motion.button>
+                                    </form>
+
+                                    <div className="text-center">
+                                        <p className="text-gray-400 text-sm">
+                                            Don't have an account?{' '}
+                                            <Link href="/register" className="text-blue-400 hover:text-blue-300 transition-colors">
+                                                Register here
+                                            </Link>
+                                        </p>
+                                    </div>
+                                </motion.div>
+                            )}
+
+                            {/*Step 1: Biometrics Collection */}
+                            {step === 1 && (
+                                <motion.div
+                                    key="biometric-step"
+                                    initial={{ opacity: 0, x: -20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: 20 }}
+                                    className="space-y-6"
+                                >
+                                    {/* Header with Email */}
+                                    <div className="flex items-center justify-between mb-6">
+                                        <button
+                                            onClick={() => setStep(0)}
+                                            className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
+                                        >
+                                            <ArrowLeft className="w-5 h-5" />
+                                            Back
+                                        </button>
+                                        <div className="flex items-center gap-2 text-white">
+                                            <Mail className="w-5 h-5 text-blue-400" />
+                                            <span className="font-medium">{email}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Skip Liveness Toggle */}
+                                    <motion.div
+                                        initial={{ opacity: 0, y: -10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className="flex items-center justify-between p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <Settings className="w-5 h-5 text-amber-400" />
+                                            <div>
+                                                <p className="text-white font-medium">Testing Mode</p>
+                                                <p className="text-gray-400 text-sm">Skip liveness detection for dataset images</p>
+                                            </div>
+                                        </div>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={skipLiveness}
+                                                onChange={(e) => {
+                                                    setSkipLiveness(e.target.checked);
+                                                    toast(e.target.checked ? 'Testing mode enabled' : 'Testing mode disabled', {
+                                                        icon: e.target.checked ? '🧪' : '🔒',
+                                                    });
+                                                }}
+                                                className="sr-only peer"
+                                            />
+                                            <div className="w-14 h-7 bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-amber-500/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-amber-500"></div>
+                                        </label>
+                                    </motion.div>
+
+                                    {/* Biometric Collection Grid */}
+                                    <div className="grid md:grid-cols-3 gap-6">
+                                        {/* Face Capture */}
+                                        <motion.div
+                                            whileHover={{ scale: 1.02 }}
+                                            className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4"
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <Camera className="w-6 h-6 text-blue-400" />
+                                                    <h3 className="text-white font-semibold">Face</h3>
+                                                </div>
+                                                <StatusIcon status={biometricStatus.face} />
+                                            </div>
+
+                                            {facePreview ? (
+                                                <div className="relative">
+                                                    <img src={facePreview} alt="Face" className="w-full rounded-xl" />
+                                                    <button
+                                                        onClick={() => {
+                                                            setFaceImage(null);
+                                                            setFacePreview(null);
+                                                            setBiometricStatus(prev => ({ ...prev, face: 'pending' }));
+                                                        }}
+                                                        className="absolute top-2 right-2 p-2 bg-red-500 rounded-full hover:bg-red-600 transition-colors"
+                                                    >
+                                                        <X className="w-4 h-4 text-white" />
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-3">
+                                                    <div className="aspect-square bg-black/30 rounded-xl overflow-hidden">
+                                                        <Webcam
+                                                            ref={webcamRef}
+                                                            screenshotFormat="image/jpeg"
+                                                            className="w-full h-full object-cover"
+                                                        />
+                                                    </div>
+                                                    <motion.button
+                                                        whileHover={{ scale: 1.05 }}
+                                                        whileTap={{ scale: 0.95 }}
+                                                        onClick={captureFace}
+                                                        className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+                                                    >
+                                                        <Camera className="w-4 h-4" />
+                                                        Capture
+                                                    </motion.button>
+                                                </div>
+                                            )}
+                                        </motion.div>
+
+                                        {/* Iris Upload */}
+                                        <motion.div
+                                            whileHover={{ scale: 1.02 }}
+                                            className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4"
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <Eye className="w-6 h-6 text-cyan-400" />
+                                                    <h3 className="text-white font-semibold">Iris</h3>
+                                                </div>
+                                                <StatusIcon status={biometricStatus.iris} />
+                                            </div>
+
+                                            <div className="aspect-square bg-black/30 rounded-xl flex items-center justify-center">
+                                                {irisFile ? (
+                                                    <div className="relative w-full h-full">
+                                                        <img
+                                                            src={URL.createObjectURL(irisFile)}
+                                                            alt="Iris"
+                                                            className="w-full h-full object-cover rounded-xl"
+                                                        />
+                                                        <button
+                                                            onClick={() => {
+                                                                setIrisFile(null);
+                                                                setBiometricStatus(prev => ({ ...prev, iris: 'pending' }));
+                                                            }}
+                                                            className="absolute top-2 right-2 p-2 bg-red-500 rounded-full hover:bg-red-600 transition-colors"
+                                                        >
+                                                            <X className="w-4 h-4 text-white" />
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <Eye className="w-16 h-16 text-gray-600" />
+                                                )}
+                                            </div>
+
+                                            <label className="block">
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onChange={(e) => handleFileUpload(e, 'iris')}
+                                                    className="hidden"
+                                                />
+                                                <motion.div
+                                                    whileHover={{ scale: 1.05 }}
+                                                    whileTap={{ scale: 0.95 }}
+                                                    className="w-full bg-cyan-500 hover:bg-cyan-600 text-white font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                                                >
+                                                    <Upload className="w-4 h-4" />
+                                                    Upload
+                                                </motion.div>
+                                            </label>
+                                        </motion.div>
+
+                                        {/* Fingerprint Upload */}
+                                        <motion.div
+                                            whileHover={{ scale: 1.02 }}
+                                            className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4"
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <Fingerprint className="w-6 h-6 text-purple-400" />
+                                                    <h3 className="text-white font-semibold">Fingerprint</h3>
+                                                </div>
+                                                <StatusIcon status={biometricStatus.fingerprint} />
+                                            </div>
+
+                                            <div className="aspect-square bg-black/30 rounded-xl flex items-center justify-center">
+                                                {fingerprintFile ? (
+                                                    <div className="relative w-full h-full">
+                                                        <img
+                                                            src={URL.createObjectURL(fingerprintFile)}
+                                                            alt="Fingerprint"
+                                                            className="w-full h-full object-cover rounded-xl"
+                                                        />
+                                                        <button
+                                                            onClick={() => {
+                                                                setFingerprintFile(null);
+                                                                setBiometricStatus(prev => ({ ...prev, fingerprint: 'pending' }));
+                                                            }}
+                                                            className="absolute top-2 right-2 p-2 bg-red-500 rounded-full hover:bg-red-600 transition-colors"
+                                                        >
+                                                            <X className="w-4 h-4 text-white" />
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <Fingerprint className="w-16 h-16 text-gray-600" />
+                                                )}
+                                            </div>
+
+                                            <label className="block">
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onChange={(e) => handleFileUpload(e, 'fingerprint')}
+                                                    className="hidden"
+                                                />
+                                                <motion.div
+                                                    whileHover={{ scale: 1.05 }}
+                                                    whileTap={{ scale: 0.95 }}
+                                                    className="w-full bg-purple-500 hover:bg-purple-600 text-white font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                                                >
+                                                    <Upload className="w-4 h-4" />
+                                                    Upload
+                                                </motion.div>
+                                            </label>
+                                        </motion.div>
+                                    </div>
+
+                                    {/* Submit Button */}
+                                    <motion.button
+                                        whileHover={{ scale: 1.02 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        onClick={handleLogin}
+                                        disabled={loading}
+                                        className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-green-500/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                    >
+                                        {loading ? (
+                                            <>
+                                                <Loader2 className="w-5 h-5 animate-spin" />
+                                                Authenticating...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <ShieldCheck className="w-5 h-5" />
+                                                Authenticate
+                                            </>
+                                        )}
+                                    </motion.button>
+
+                                    <p className="text-center text-gray-400 text-sm">
+                                        Provide at least 2 biometrics to login (2/3 Rule)
+                                    </p>
+                                </motion.div>
+                            )}
+
+                            {/* Step 2: Processing */}
+                            {step === 2 && (
+                                <motion.div
+                                    key="processing-step"
+                                    initial={{ opacity: 0, scale: 0.9 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 1.1 }}
+                                    className="text-center py-12 space-y-6"
+                                >
+                                    <motion.div
+                                        animate={{ rotate: 360 }}
+                                        transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                                        className="inline-block"
+                                    >
+                                        <ShieldCheck className="w-20 h-20 text-blue-400" />
+                                    </motion.div>
+                                    <div>
+                                        <h2 className="text-3xl font-bold text-white mb-2">Authenticating...</h2>
+                                        <p className="text-gray-400">Analyzing your biometric data</p>
+                                    </div>
+                                    <div className="flex justify-center gap-2">
+                                        <motion.div
+                                            animate={{ scale: [1, 1.2, 1] }}
+                                            transition={{ duration: 1, repeat: Infinity, delay: 0 }}
+                                            className="w-3 h-3 bg-blue-500 rounded-full"
+                                        />
+                                        <motion.div
+                                            animate={{ scale: [1, 1.2, 1] }}
+                                            transition={{ duration: 1, repeat: Infinity, delay: 0.2 }}
+                                            className="w-3 h-3 bg-cyan-500 rounded-full"
+                                        />
+                                        <motion.div
+                                            animate={{ scale: [1, 1.2, 1] }}
+                                            transition={{ duration: 1, repeat: Infinity, delay: 0.4 }}
+                                            className="w-3 h-3 bg-purple-500 rounded-full"
                                         />
                                     </div>
-                                </div>
-                                <button
-                                    type="submit"
-                                    className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-4 rounded-xl transition-all"
+                                </motion.div>
+                            )}
+
+                            {/* Step 3: Result */}
+                            {step === 3 && authResult && (
+                                <motion.div
+                                    key="result-step"
+                                    initial={{ opacity: 0, scale: 0.9 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    className="space-y-6"
                                 >
-                                    Continue →
-                                </button>
-                            </form>
-                        )}
-
-                        {/* Step 1: Biometric Input */}
-                        {step === 1 && (
-                            <div className="space-y-8">
-                                <p className="text-center text-gray-400 text-sm">
-                                    Provide at least 2 biometrics to verify identity
-                                </p>
-
-                                {/* 1. Face (Webcam) */}
-                                <div className={`border rounded-xl p-4 transition-all ${faceImage ? 'border-green-500/50 bg-green-500/5' : 'border-gray-800 bg-gray-950'}`}>
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h3 className="font-medium flex items-center gap-2">
-                                            <Camera className="text-blue-400" size={18} /> Face Verification
-                                        </h3>
-                                        {faceImage && <Check className="text-green-500" size={18} />}
-                                    </div>
-
-                                    {!facePreview ? (
-                                        <div className="space-y-4">
-                                            <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
-                                                <Webcam
-                                                    audio={false}
-                                                    ref={webcamRef}
-                                                    screenshotFormat="image/jpeg"
-                                                    className="w-full h-full object-cover"
-                                                />
-                                            </div>
-                                            <button
-                                                onClick={captureFace}
-                                                className="w-full py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition-colors"
+                                    {/* Result Icon */}
+                                    <div className="text-center">
+                                        {authResult.success ? (
+                                            <motion.div
+                                                initial={{ scale: 0 }}
+                                                animate={{ scale: 1 }}
+                                                transition={{ type: 'spring', stiffness: 200 }}
                                             >
-                                                Capture Face
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <div className="flex gap-4">
-                                            <img src={facePreview} alt="Face" className="w-20 h-20 rounded-lg object-cover border border-gray-700" />
-                                            <button
-                                                onClick={() => { setFacePreview(null); setFaceImage(null); }}
-                                                className="text-sm text-gray-400 hover:text-white underline"
+                                                <ShieldCheck className="w-24 h-24 mx-auto text-green-500 mb-4" />
+                                                <h2 className="text-3xl font-bold text-white mb-2">Access Granted!</h2>
+                                                <p className="text-gray-400">Authentication successful</p>
+                                            </motion.div>
+                                        ) : (
+                                            <motion.div
+                                                initial={{ scale: 0 }}
+                                                animate={{ scale: 1 }}
+                                                transition={{ type: 'spring', stiffness: 200 }}
                                             >
-                                                Retake
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* 2. Iris (Upload) */}
-                                <div className={`border rounded-xl p-4 transition-all ${irisFile ? 'border-green-500/50 bg-green-500/5' : 'border-gray-800 bg-gray-950'}`}>
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h3 className="font-medium flex items-center gap-2">
-                                            <Upload className="text-purple-400" size={18} /> Iris Upload
-                                        </h3>
-                                        {irisFile && <Check className="text-green-500" size={18} />}
+                                                <ShieldAlert className="w-24 h-24 mx-auto text-red-500 mb-4" />
+                                                <h2 className="text-3xl font-bold text-white mb-2">Access Denied</h2>
+                                                <p className="text-gray-400">{authResult.message}</p>
+                                            </motion.div>
+                                        )}
                                     </div>
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={(e) => handleFileUpload(e, 'iris')}
-                                        className="text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-800 file:text-white hover:file:bg-gray-700"
-                                    />
-                                </div>
 
-                                {/* 3. Fingerprint (Upload) */}
-                                <div className={`border rounded-xl p-4 transition-all ${fingerprintFile ? 'border-green-500/50 bg-green-500/5' : 'border-gray-800 bg-gray-950'}`}>
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h3 className="font-medium flex items-center gap-2">
-                                            <Upload className="text-orange-400" size={18} /> Fingerprint Upload
-                                        </h3>
-                                        {fingerprintFile && <Check className="text-green-500" size={18} />}
-                                    </div>
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={(e) => handleFileUpload(e, 'fingerprint')}
-                                        className="text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-800 file:text-white hover:file:bg-gray-700"
-                                    />
-                                </div>
-
-                                <button
-                                    onClick={handleLogin}
-                                    disabled={loading}
-                                    className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-4 rounded-xl transition-all disabled:opacity-50"
-                                >
-                                    Verify & Login
-                                </button>
-                            </div>
-                        )}
-
-                        {/* Step 2: Processing */}
-                        {step === 2 && (
-                            <div className="text-center py-12">
-                                <div className="animate-spin w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-6"></div>
-                                <h3 className="text-xl font-medium text-white">Verifying Identity...</h3>
-                                <p className="text-gray-400 mt-2">Checking liveness and biometrics</p>
-                            </div>
-                        )}
-
-                        {/* Step 3: Result */}
-                        {step === 3 && authResult && (
-                            <div className="text-center py-8">
-                                <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 ${authResult.success ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
-                                    {authResult.success ? <ShieldCheck size={40} /> : <ShieldAlert size={40} />}
-                                </div>
-
-                                <h2 className="text-2xl font-bold text-white mb-2">
-                                    {authResult.success ? 'Access Granted' : 'Access Denied'}
-                                </h2>
-                                <p className="text-gray-400 mb-6">{authResult.message}</p>
-
-                                <div className="bg-gray-950 rounded-xl p-4 mb-6 text-left">
-                                    <h4 className="text-sm font-medium text-gray-500 mb-3 uppercase tracking-wider">Analysis Report</h4>
-                                    <div className="space-y-2 text-sm">
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-400">Rule 2/3 Check:</span>
-                                            <span className={authResult.passed_biometrics >= 2 ? "text-green-400" : "text-red-400"}>
-                                                {authResult.passed_biometrics}/3 Passed
-                                            </span>
-                                        </div>
-                                        {authResult.liveness_checks && Object.entries(authResult.liveness_checks).map(([key, res]: [string, any]) => (
-                                            <div key={key} className="flex justify-between border-t border-gray-800 pt-2 mt-2">
-                                                <span className="text-gray-400 capitalize">{key} Liveness:</span>
-                                                <span className={res.is_live ? "text-green-400" : "text-red-400"}>
-                                                    {res.is_live ? "Real" : "Spoof Detected"}
-                                                </span>
+                                    {/* Stats */}
+                                    <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+                                        <h3 className="text-white font-semibold mb-4 text-center">Authentication Report</h3>
+                                        <div className="grid grid-cols-3 gap-4 text-center">
+                                            <div>
+                                                <p className="text-2xl font-bold text-blue-400">{authResult.passed_biometrics}</p>
+                                                <p className="text-gray-400 text-sm">Passed</p>
                                             </div>
-                                        ))}
-                                    </div>
-                                </div>
+                                            <div>
+                                                <p className="text-2xl font-bold text-gray-400">/</p>
+                                                <p className="text-gray-400 text-sm">of</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-2xl font-bold text-purple-400">3</p>
+                                                <p className="text-gray-400 text-sm">Total</p>
+                                            </div>
+                                        </div>
 
-                                {authResult.success ? (
-                                    <Link href="/dashboard" className="block w-full bg-green-600 hover:bg-green-500 text-white font-medium py-4 rounded-xl transition-all">
-                                        Proceed to Dashboard
-                                    </Link>
-                                ) : (
-                                    <button
-                                        onClick={() => setStep(1)}
-                                        className="w-full bg-gray-800 hover:bg-gray-700 text-white font-medium py-4 rounded-xl transition-all"
-                                    >
-                                        Try Again
-                                    </button>
-                                )}
-                            </div>
-                        )}
+                                        {/* Liveness Results */}
+                                        {authResult.liveness_checks && (
+                                            <div className="mt-6 space-y-2">
+                                                <h4 className="text-white font-medium text-sm mb-3">Liveness Checks:</h4>
+                                                {Object.entries(authResult.liveness_checks).map(([key, value]: [string, any]) => (
+                                                    <div key={key} className="flex items-center justify-between text-sm">
+                                                        <span className="text-gray-400 capitalize">{key}:</span>
+                                                        <span className={value?.is_live ? 'text-green-400' : 'text-red-400'}>
+                                                            {value?.is_live || value?.skipped ? 'Real' : 'Spoof Detected'}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Action Buttons */}
+                                    <div className="flex gap-4">
+                                        <motion.button
+                                            whileHover={{ scale: 1.05 }}
+                                            whileTap={{ scale: 0.95 }}
+                                            onClick={resetForm}
+                                            className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 rounded-xl transition-colors"
+                                        >
+                                            Try Again
+                                        </motion.button>
+                                        {authResult.success && (
+                                            <motion.button
+                                                whileHover={{ scale: 1.05 }}
+                                                whileTap={{ scale: 0.95 }}
+                                                onClick={() => window.location.href = '/'}
+                                                className="flex-1 bg-green-500 hover:bg-green-600 text-white font-semibold py-3 rounded-xl transition-colors"
+                                            >
+                                                Continue to Dashboard
+                                            </motion.button>
+                                        )}
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </motion.div>
+
+                    {/* Footer */}
+                    <div className="text-center mt-8">
+                        <p className="text-gray-400 text-sm">
+                            Powered by InsightFace, Gabor Wavelets & SIFT
+                        </p>
                     </div>
-                </div>
+                </motion.div>
             </div>
         </div>
     );
