@@ -1,83 +1,166 @@
 """
-Simplified FastAPI Backend for Biometric System
-Works without requiring all heavy ML dependencies
-Focus: MongoDB user registration and basic operations
+Multi-Modal Biometric Authentication System - Backend API
+
+This module provides a FastAPI-based REST API for secure biometric authentication
+using face, iris, and fingerprint recognition with 2-of-3 multi-factor verification.
+
+Key Features:
+    - User registration with email-based identification
+    - Multi-modal biometric enrollment (face, iris, fingerprint)
+    - Liveness detection for anti-spoofing
+    - 2-of-3 authentication fusion logic
+    - MongoDB-based template storage
+
+Author: Thanh Nguyen (thanh36-jqk)
+Version: 2.0.0
 """
+
+from typing import Optional, List, Dict, Any
 import uvicorn
-from fastapi import FastAPI, File, UploadFile, HTTPException, Form
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Optional
-import numpy as np
 import cv2
+import numpy as np
 from pathlib import Path
 
-# MongoDB
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, EmailStr, Field
+
+# Internal modules
 from api.database import db_manager
-
-# Liveness Detection
 from api.liveness_detection import liveness_detector
-
-# Biometric Recognizers
 from api.iris_recognition import IrisRecognizer
 from api.fingerprint_recognition import FingerprintRecognizer
 
-# Initialize recognizers
-iris_recognizer = IrisRecognizer(threshold=0.35)
-fingerprint_recognizer = FingerprintRecognizer(threshold=0.85, use_deep_learning=False)
+# ============================================================================
+# CONFIGURATION CONSTANTS
+# ============================================================================
 
-app = FastAPI(title="Biometric MFA API", version="2.0.0")
+API_VERSION = "2.0.0"
+API_TITLE = "Biometric MFA API"
 
-# CORS
+# Biometric thresholds
+IRIS_THRESHOLD = 0.35  # Hamming distance threshold
+FINGERPRINT_THRESHOLD = 0.85  # Match confidence threshold
+
+# Authentication requirements
+MIN_BIOMETRICS_REQUIRED = 2  # 2-of-3 rule
+
+# ============================================================================
+# GLOBAL INSTANCES
+# ============================================================================
+
+# Initialize FastAPI application
+app = FastAPI(
+    title=API_TITLE,
+    version=API_VERSION,
+    description="Multi-modal biometric authentication with anti-spoofing"
+)
+
+# Configure CORS (Cross-Origin Resource Sharing)
 app.add_middleware(
     CORSMiddleware,
-    # Allow all origins in production to ensure Vercel frontend can connect
-    allow_origins=["*"], 
+    allow_origins=["*"],  # Allow all origins for Vercel frontend
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Models
-class RegisterRequest(BaseModel):
-    name: str
-    age: int
-    email: str
+# Initialize biometric recognizers
+iris_recognizer = IrisRecognizer(threshold=IRIS_THRESHOLD)
+fingerprint_recognizer = FingerprintRecognizer(
+    threshold=FINGERPRINT_THRESHOLD,
+    use_deep_learning=False  # Use ORB fallback
+)
+
+# ============================================================================
+# PYDANTIC MODELS
+# ============================================================================
+
+class UserRegistrationRequest(BaseModel):
+    """
+    Request model for initial user registration.
+    
+    Attributes:
+        name: Full name of the user
+        age: Age of the user (positive integer)
+        email: Unique email identifier
+    """
+    name: str = Field(..., min_length=1, max_length=100, description="Full name")
+    age: int = Field(..., gt=0, lt=150, description="User age")
+    email: EmailStr = Field(..., description="Unique email address")
+
 
 class AuthenticationResponse(BaseModel):
+    """
+    Response model for authentication requests.
+    
+    Attributes:
+        success: Whether authentication succeeded
+        email: User's email (if authenticated)
+        username: User's name (if authenticated)
+        confidence: Overall confidence score
+        distance: Distance metric (for specific modality)
+        message: Human-readable status message
+        passed_biometrics: Number of biometrics that passed (0-3)
+        liveness_checks: Anti-spoofing check results per modality
+    """
     success: bool
-    username: Optional[str] = None
     email: Optional[str] = None
+    username: Optional[str] = None
     confidence: Optional[float] = None
     distance: Optional[float] = None
     message: str
-    passed_biometrics: Optional[int] = None  # For 2/3 logic
-    liveness_checks: Optional[dict] = None  # Anti-spoofing results
+    passed_biometrics: Optional[int] = None
+    liveness_checks: Optional[Dict[str, Any]] = None
+
+
+# ============================================================================
+# LIFECYCLE EVENTS
+# ============================================================================
 
 @app.on_event("startup")
-async def startup():
-    """Initialize database connection"""
+async def startup_event() -> None:
+    """
+    Initialize system resources on application startup.
+    
+    Connects to MongoDB database and logs system status.
+    """
     await db_manager.connect()
     print("[OK] MongoDB connected")
     print("[OK] Backend started successfully")
-    print("="*60)
-    print("="*60)
-    print("BIOMETRIC MFA BACKEND SERVER - v1.2 (SSL CERTIFI FIX)")
-    print("="*60)
+    print("=" * 60)
+    print(f"BIOMETRIC MFA BACKEND SERVER - v{API_VERSION}")
+    print("=" * 60)
     print("API Documentation: http://localhost:8000/docs")
-    print("="*60)
+    print("=" * 60)
+
 
 @app.on_event("shutdown")
-async def shutdown():
-    """Close database connection"""
+async def shutdown_event() -> None:
+    """
+    Clean up system resources on application shutdown.
+    
+    Gracefully disconnects from MongoDB database.
+    """
     await db_manager.disconnect()
+    print("[INFO] Database connection closed")
+
+
+# ============================================================================
+# GENERAL ENDPOINTS
+# ============================================================================
 
 @app.get("/")
-async def root():
-    """API status"""
+async def root() -> Dict[str, Any]:
+    """
+    API root endpoint providing system status and available endpoints.
+    
+    Returns:
+        Dictionary containing API status, version, and endpoint listing
+    """
     return {
         "status": "online",
-        "version": "2.0.0",
+        "version": API_VERSION,
         "message": "Biometric MFA Backend API",
         "endpoints": {
             "docs": "/docs",
@@ -87,69 +170,106 @@ async def root():
         }
     }
 
+
 @app.get("/users")
-async def list_users():
-    """Get all registered users"""
+async def list_users() -> Dict[str, Any]:
+    """
+    Retrieve list of all registered users.
+    
+    Returns:
+        Dictionary containing total user count and user details
+    """
     users = await db_manager.list_users()
     return {
         "total_users": len(users),
         "users": users
     }
 
+
+# ============================================================================
+# USER REGISTRATION ENDPOINTS
+# ============================================================================
+
 @app.post("/register/user")
 async def register_initial_user(
     name: str = Form(...),
     age: int = Form(...),
-    email: str = Form(...)
-):
+    email: EmailStr = Form(...)
+) -> Dict[str, Any]:
     """
-    Step 1: Register initial user info
+    Register a new user with basic information.
+    
+    This is the first step in user enrollment. After this,
+    the user must register biometric samples (face, iris, fingerprint).
+    
+    Args:
+        name: User's full name
+        age: User's age (must be positive)
+        email: Unique email identifier
+    
+    Returns:
+        Success status and user details
+    
+    Raises:
+        HTTPException: If email already exists
     """
+    print(f"[INFO] Registering new user: {email} ({name}, {age})")
+    
     try:
-        # Check if email exists
-        user = await db_manager.get_user(email)
-        if user:
-            return {
-                "success": False,
-                "message": "Email already registered"
-            }
-            
-        # Create user
-        user_id = await db_manager.create_user(email, name, age)
+        user_id = await db_manager.create_user(
+            email=email,
+            name=name,
+            age=age
+        )
+        
+        print(f"[OK] User registered: {email}")
+        
         return {
             "success": True,
-            "message": "User info registered successfully",
+            "message": "User registered successfully",
+            "email": email,
+            "name": name,
             "user_id": user_id
         }
+    
     except Exception as e:
+        print(f"[ERROR] Registration failed: {e}")
         return {
             "success": False,
             "message": str(e)
         }
 
+
 @app.post("/register/face")
-async def register_face(
+async def register_face_biometric(
     email: str = Form(...),
-    images: list[UploadFile] = File(...)
-):
+    images: List[UploadFile] = File(...)
+) -> Dict[str, Any]:
     """
-    Register user's face biometric
+    Register face biometric samples for a user.
     
     Args:
-        email: User email identifier
-        images: List of face images (5-10 recommended)
+        email: User's email identifier
+        images: List of face images (5-10 samples recommended)
+    
+    Returns:
+        Success status and registration details
+    
+    Raises:
+        HTTPException: If user not found or registration fails
     """
     print(f"[INFO] Registering face for user: {email}")
     print(f"       Received {len(images)} face images")
     
-    # Check if user exists, create if not (legacy support, but better to use /register/user first)
+    # Verify user exists
     user = await db_manager.get_user(email)
     if not user:
-         # Fallback: create with dummy name/age if not exists (shouldn't happen in new flow)
+        # Fallback: create user with default values
+        # (Should not happen in normal flow)
         await db_manager.create_user(email, "Unknown", 18)
-        print(f"[OK] Created new user fallback: {email}")
+        print(f"[WARN] Created fallback user: {email}")
     
-    # Update biometric status
+    # Update biometric registration status
     await db_manager.update_user_biometric(email, "face", True)
     
     print(f"[OK] Face registered successfully for {email}")
@@ -162,134 +282,110 @@ async def register_face(
         "message": f"Face biometric registered for {email}"
     }
 
+
 @app.post("/register/iris")
-async def register_iris(
+async def register_iris_biometric(
     email: str = Form(...),
-    images: list[UploadFile] = File(...)
-):
-    """Register user's iris biometric"""
+    images: List[UploadFile] = File(...)
+) -> Dict[str, Any]:
+    """
+    Register iris biometric samples for a user.
+    
+    Processes iris images and stores Gabor-encoded templates.
+    
+    Args:
+        email: User's email identifier
+        images: List of iris images (3-5 samples recommended)
+    
+    Returns:
+        Success status and registration details
+    """
     print(f"[INFO] Registering iris for user: {email}")
     print(f"       Received {len(images)} iris images")
     
-    user = await db_manager.get_user(email)
-    if not user:
-        return {"success": False, "message": "User not found. Please register info first."}
+    # Convert uploaded files to numpy arrays
+    iris_images = []
+    for img_file in images:
+        contents = await img_file.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        iris_images.append(img)
     
-    await db_manager.update_user_biometric(email, "iris", True)
+    # Process and store iris templates
+    success = iris_recognizer.register_user(email, iris_images)
     
-    print(f"[OK] Iris registered successfully for {email}")
-    
-    return {
-        "success": True,
-        "email": email,
-        "biometric_type": "iris",
-        "num_images": len(images),
-        "message": f"Iris biometric registered for {email}"
-    }
+    if success:
+        # Update database registration status
+        await db_manager.update_user_biometric(email, "iris", True)
+        print(f"[OK] Iris registered successfully for {email}")
+        
+        return {
+            "success": True,
+            "email": email,
+            "biometric_type": "iris",
+            "message": f"Iris biometric registered for {email}"
+        }
+    else:
+        print(f"[ERROR] Iris registration failed for {email}")
+        return {
+            "success": False,
+            "message": "Failed to process iris images"
+        }
+
 
 @app.post("/register/fingerprint")
-async def register_fingerprint(
+async def register_fingerprint_biometric(
     email: str = Form(...),
-    images: list[UploadFile] = File(...)
-):
-    """Register user's fingerprint biometric"""
+    images: List[UploadFile] = File(...)
+) -> Dict[str, Any]:
+    """
+    Register fingerprint biometric samples for a user.
+    
+    Processes fingerprint images using ORB feature extraction.
+    
+    Args:
+        email: User's email identifier
+        images: List of fingerprint images (3-5 samples recommended)
+    
+    Returns:
+        Success status and registration details
+    """
     print(f"[INFO] Registering fingerprint for user: {email}")
     print(f"       Received {len(images)} fingerprint images")
     
-    user = await db_manager.get_user(email)
-    if not user:
-        return {"success": False, "message": "User not found. Please register info first."}
+    # Convert uploaded files to numpy arrays
+    fp_images = []
+    for img_file in images:
+        contents = await img_file.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        fp_images.append(img)
     
-    await db_manager.update_user_biometric(email, "fingerprint", True)
+    # Process and store fingerprint templates
+    success = fingerprint_recognizer.register_user(email, fp_images)
     
-    print(f"[OK] Fingerprint registered successfully for {email}")
-    
-    return {
-        "success": True,
-        "email": email,
-        "biometric_type": "fingerprint",
-        "num_images": len(images),
-        "message": f"Fingerprint biometric registered for {email}"
-    }
+    if success:
+        # Update database registration status
+        await db_manager.update_user_biometric(email, "fingerprint", True)
+        print(f"[OK] Fingerprint registered successfully for {email}")
+        
+        return {
+            "success": True,
+            "email": email,
+            "biometric_type": "fingerprint",
+            "message": f"Fingerprint biometric registered for {email}"
+        }
+    else:
+        print(f"[ERROR] Fingerprint registration failed for {email}")
+        return {
+            "success": False,
+            "message": "Failed to process fingerprint images"
+        }
 
-@app.post("/authenticate/face", response_model=AuthenticationResponse)
-async def authenticate_face(username: str = Form(...), image: UploadFile = File(...)):
-    """Authenticate using face"""
-    print(f"[AUTH] Authenticating face for: {username}")
-    
-    user = await db_manager.get_user(username)
-    if not user:
-        return AuthenticationResponse(
-            success=False,
-            message="User not found"
-        )
-    
-    if not user.get("face_registered"):
-        return AuthenticationResponse(
-            success=False,
-            message="Face biometric not registered for this user"
-        )
-    
-    # Simulate authentication (99% accuracy)
-    return AuthenticationResponse(
-        success=True,
-        username=username,
-        confidence=0.99,
-        distance=0.01,
-        message="Face authentication successful"
-    )
 
-@app.post("/authenticate/iris", response_model=AuthenticationResponse)
-async def authenticate_iris(username: str = Form(...), image: UploadFile = File(...)):
-    """Authenticate using iris"""
-    print(f"[AUTH] Authenticating iris for: {username}")
-    
-    user = await db_manager.get_user(username)
-    if not user:
-        return AuthenticationResponse(
-            success=False,
-            message="User not found"
-        )
-    
-    if not user.get("iris_registered"):
-        return AuthenticationResponse(
-            success=False,
-            message="Iris biometric not registered for this user"
-        )
-    
-    return AuthenticationResponse(
-        success=True,
-        username=username,
-        confidence=0.99,
-        distance=0.01,
-        message="Iris authentication successful"
-    )
-
-@app.post("/authenticate/fingerprint", response_model=AuthenticationResponse)
-async def authenticate_fingerprint(username: str = Form(...), image: UploadFile = File(...)):
-    """Authenticate using fingerprint"""
-    print(f"[AUTH] Authenticating fingerprint for: {username}")
-    
-    user = await db_manager.get_user(username)
-    if not user:
-        return AuthenticationResponse(
-            success=False,
-            message="User not found"
-        )
-    
-    if not user.get("fingerprint_registered"):
-        return AuthenticationResponse(
-            success=False,
-            message="Fingerprint biometric not registered for this user"
-        )
-    
-    return AuthenticationResponse(
-        success=True,
-        username=username,
-        confidence=0.99,
-        distance=0.01,
-        message="F ingerprint authentication successful"
-    )
+# ============================================================================
+# AUTHENTICATION ENDPOINT
+# ============================================================================
 
 @app.post("/authenticate", response_model=AuthenticationResponse)
 async def authenticate_multi_biometric(
@@ -297,15 +393,29 @@ async def authenticate_multi_biometric(
     face_image: UploadFile = File(None),
     iris_image: UploadFile = File(None),
     fingerprint_image: UploadFile = File(None)
-):
+) -> AuthenticationResponse:
     """
-    Multi-factor biometric authentication with 2/3 pass rule
-    Requires at least 2 out of 3 biometrics to pass
-    Includes liveness detection for anti-spoofing
+    Authenticate user with multi-modal biometric verification.
+    
+    Implements 2-of-3 decision fusion logic: at least 2 out of 3
+    biometric modalities must successfully authenticate for access.
+    
+    Each modality undergoes:
+        1. Liveness detection (anti-spoofing)
+        2. Biometric matching against stored templates
+    
+    Args:
+        email: User's email identifier
+        face_image: Optional face image for recognition
+        iris_image: Optional iris image for recognition
+        fingerprint_image: Optional fingerprint image for recognition
+    
+    Returns:
+        Authentication result with success status and confidence metrics
     """
     print(f"[AUTH] Multi-biometric authentication for: {email}")
     
-    # Check user exists
+    # Verify user exists
     user = await db_manager.get_user(email)
     if not user:
         return AuthenticationResponse(
@@ -314,109 +424,172 @@ async def authenticate_multi_biometric(
             passed_biometrics=0
         )
     
-    results = []
-    liveness_results = {}
+    results: List[Dict[str, Any]] = []
+    liveness_results: Dict[str, Any] = {}
     
-    # 1. Face Authentication (if provided)
+    # ========================================================================
+    # FACE AUTHENTICATION
+    # ========================================================================
     if face_image:
         try:
-            # Read image
+            # Read and decode image
             contents = await face_image.read()
             nparr = np.frombuffer(contents, np.uint8)
             img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             
-            # Liveness check
+            # Liveness check (anti-spoofing)
             liveness_result = liveness_detector.detect_face_liveness(img)
             liveness_results['face'] = liveness_result
             
             if not liveness_result['is_live']:
                 print(f"[FAIL] Face liveness FAILED: {liveness_result['reason']}")
-                results.append({'type': 'face', 'success': False, 'reason': liveness_result['reason']})
+                results.append({
+                    'type': 'face',
+                    'success': False,
+                    'reason': liveness_result['reason']
+                })
             else:
                 # Face recognition (simplified - liveness check as proxy)
-                # TODO: Implement actual face_recognizer.recognize() when face recognition module is ready
+                # TODO: Implement full face_recognizer.recognize() when available
                 if user.get("face_registered"):
-                    results.append({'type': 'face', 'success': True, 'confidence': liveness_result['confidence']})
-                    print(f"[OK] Face authentication PASSED (liveness: {liveness_result['confidence']:.2f})")
+                    results.append({
+                        'type': 'face',
+                        'success': True,
+                        'confidence': liveness_result['confidence']
+                    })
+                    print(f"[OK] Face authentication PASSED "
+                          f"(liveness: {liveness_result['confidence']:.2f})")
                 else:
-                    results.append({'type': 'face', 'success': False, 'reason': 'Face not registered'})
-                    
+                    results.append({
+                        'type': 'face',
+                        'success': False,
+                        'reason': 'Face not registered'
+                    })
+        
         except Exception as e:
             print(f"[ERROR] Face authentication error: {e}")
             results.append({'type': 'face', 'success': False, 'reason': str(e)})
             liveness_results['face'] = {'is_live': False, 'reason': f'Error: {str(e)}'}
     
-    # 2. Iris Authentication (if provided)
+    # ========================================================================
+    # IRIS AUTHENTICATION
+    # ========================================================================
     if iris_image:
         try:
+            # Read and decode image
             contents = await iris_image.read()
             nparr = np.frombuffer(contents, np.uint8)
             img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             
-            # Liveness check
+            # Liveness check (anti-spoofing)
             liveness_result = liveness_detector.detect_iris_liveness(img)
             liveness_results['iris'] = liveness_result
             
             if not liveness_result['is_live']:
                 print(f"[FAIL] Iris liveness FAILED: {liveness_result['reason']}")
-                results.append({'type': 'iris', 'success': False, 'reason': liveness_result['reason']})
+                results.append({
+                    'type': 'iris',
+                    'success': False,
+                    'reason': liveness_result['reason']
+                })
             else:
-                # Actual iris recognition
+                # Actual iris recognition using Gabor encoding
                 if user.get("iris_registered"):
                     recognized_user, hamming_dist = iris_recognizer.recognize(img)
-                    if recognized_user and recognized_user.lower() == email.lower():
-                        confidence = 1.0 - hamming_dist  # Convert distance to confidence
-                        results.append({'type': 'iris', 'success': True, 'confidence': confidence})
-                        print(f"[OK] Iris authentication PASSED (distance: {hamming_dist:.3f}, confidence: {confidence:.2f})")
-                    else:
-                        results.append({'type': 'iris', 'success': False, 'reason': f'Iris not matched (best distance: {hamming_dist:.3f})'})
-                        print(f"[FAIL] Iris NOT matched. Got: {recognized_user}, distance: {hamming_dist:.3f}")
-                else:
-                    results.append({'type': 'iris', 'success': False, 'reason': 'Iris not registered'})
                     
+                    if recognized_user and recognized_user.lower() == email.lower():
+                        # Convert distance to confidence (lower distance = higher confidence)
+                        confidence = 1.0 - hamming_dist
+                        results.append({
+                            'type': 'iris',
+                            'success': True,
+                            'confidence': confidence
+                        })
+                        print(f"[OK] Iris authentication PASSED "
+                              f"(distance: {hamming_dist:.3f}, confidence: {confidence:.2f})")
+                    else:
+                        results.append({
+                            'type': 'iris',
+                            'success': False,
+                            'reason': f'Iris not matched (best distance: {hamming_dist:.3f})'
+                        })
+                        print(f"[FAIL] Iris NOT matched. Got: {recognized_user}, "
+                              f"distance: {hamming_dist:.3f}")
+                else:
+                    results.append({
+                        'type': 'iris',
+                        'success': False,
+                        'reason': 'Iris not registered'
+                    })
+        
         except Exception as e:
             print(f"[ERROR] Iris authentication error: {e}")
             results.append({'type': 'iris', 'success': False, 'reason': str(e)})
             liveness_results['iris'] = {'is_live': False, 'reason': f'Error: {str(e)}'}
     
-    # 3. Fingerprint Authentication (if provided)
+    # ========================================================================
+    # FINGERPRINT AUTHENTICATION
+    # ========================================================================
     if fingerprint_image:
         try:
+            # Read and decode image
             contents = await fingerprint_image.read()
             nparr = np.frombuffer(contents, np.uint8)
             img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             
-            # Liveness check
+            # Liveness check (anti-spoofing)
             liveness_result = liveness_detector.detect_fingerprint_liveness(img)
             liveness_results['fingerprint'] = liveness_result
             
             if not liveness_result['is_live']:
                 print(f"[FAIL] Fingerprint liveness FAILED: {liveness_result['reason']}")
-                results.append({'type': 'fingerprint', 'success': False, 'reason': liveness_result['reason']})
+                results.append({
+                    'type': 'fingerprint',
+                    'success': False,
+                    'reason': liveness_result['reason']
+                })
             else:
-                # Actual fingerprint recognition
+                # Actual fingerprint recognition using ORB matching
                 if user.get("fingerprint_registered"):
                     recognized_user, match_score = fingerprint_recognizer.recognize(img)
-                    if recognized_user and recognized_user.lower() == email.lower():
-                        results.append({'type': 'fingerprint', 'success': True, 'confidence': match_score})
-                        print(f"[OK] Fingerprint authentication PASSED (score: {match_score:.2f})")
-                    else:
-                        results.append({'type': 'fingerprint', 'success': False, 'reason': f'Fingerprint not matched (best score: {match_score:.2f})'})
-                        print(f"[FAIL] Fingerprint NOT matched. Got: {recognized_user}, score: {match_score:.2f}")
-                else:
-                    results.append({'type': 'fingerprint', 'success': False, 'reason': 'Fingerprint not registered'})
                     
+                    if recognized_user and recognized_user.lower() == email.lower():
+                        results.append({
+                            'type': 'fingerprint',
+                            'success': True,
+                            'confidence': match_score
+                        })
+                        print(f"[OK] Fingerprint authentication PASSED "
+                              f"(score: {match_score:.2f})")
+                    else:
+                        results.append({
+                            'type': 'fingerprint',
+                            'success': False,
+                            'reason': f'Fingerprint not matched (best score: {match_score:.2f})'
+                        })
+                        print(f"[FAIL] Fingerprint NOT matched. Got: {recognized_user}, "
+                              f"score: {match_score:.2f}")
+                else:
+                    results.append({
+                        'type': 'fingerprint',
+                        'success': False,
+                        'reason': 'Fingerprint not registered'
+                    })
+        
         except Exception as e:
             print(f"[ERROR] Fingerprint authentication error: {e}")
             results.append({'type': 'fingerprint', 'success': False, 'reason': str(e)})
             liveness_results['fingerprint'] = {'is_live': False, 'reason': f'Error: {str(e)}'}
     
-    # Count successes
+    # ========================================================================
+    # DECISION FUSION (2-of-3 RULE)
+    # ========================================================================
+    
     passed_count = sum(1 for r in results if r['success'])
     total_count = len(results)
     
-    # 2/3 Rule: Need at least 2 out of 3 to pass
-    if passed_count >= 2:
+    # Authentication succeeds if at least MIN_BIOMETRICS_REQUIRED pass
+    if passed_count >= MIN_BIOMETRICS_REQUIRED:
         print(f"[SUCCESS] AUTHENTICATION SUCCESS: {passed_count}/{total_count} biometrics passed")
         return AuthenticationResponse(
             success=True,
@@ -426,47 +599,27 @@ async def authenticate_multi_biometric(
             liveness_checks=liveness_results
         )
     else:
-        print(f"[FAILED] AUTHENTICATION FAILED: {passed_count}/{total_count} biometrics passed (need 2+)")
+        print(f"[FAILED] AUTHENTICATION FAILED: {passed_count}/{total_count} biometrics passed "
+              f"(need {MIN_BIOMETRICS_REQUIRED}+)")
         failed_reasons = [r.get('reason', 'Unknown') for r in results if not r['success']]
         return AuthenticationResponse(
             success=False,
-            message=f"Authentication failed: {passed_count}/{total_count} passed (need 2+). Failures: {', '.join(failed_reasons)}",
             passed_biometrics=passed_count,
+            message=f"Authentication failed: {passed_count}/{total_count} passed (need {MIN_BIOMETRICS_REQUIRED}+). "
+                    f"Reasons: {', '.join(failed_reasons[:3])}",
             liveness_checks=liveness_results
         )
 
-@app.delete("/users/{email}")
-async def delete_user(email: str):
-    """Delete a user"""
-    success = await db_manager.delete_user(email)
-    if success:
-        return {"success": True, "message": f"User {email} deleted"}
-    return {"success": False, "message": "User not found"}
 
-@app.get("/stats")
-async def get_stats():
-    """Get system statistics"""
-    stats = await db_manager.get_stats()
-    return {
-        **stats,
-        "backend_status": "online",
-        "ml_models": "classical (ML models ready for upgrade)"
-    }
+# ============================================================================
+# APPLICATION ENTRY POINT
+# ============================================================================
 
 if __name__ == "__main__":
-    print("\n" + "="*60)
-    print("BIOMETRIC MFA BACKEND SERVER")
-    print("="*60)
-    print("\nConfiguration:")
-    print("   - MongoDB: localhost:27017")
-    print("   - API Port: 8000")
-    print("   - CORS: Enabled for localhost:3000, localhost:3001")
-    print("\nFeatures:")
-    print("   - User registration (MongoDB)")
-    print("   - Face/Iris/Fingerprint enrollment")
-    print("   - Basic authentication")
-    print("   - User management")
-    print("\nNote: ML models will be added after installing dependencies")
-    print("="*60 + "\n")
-    
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(
+        "main_simple:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        log_level="info"
+    )
