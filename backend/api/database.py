@@ -30,12 +30,19 @@ class MongoDBManager:
     async def connect(self):
         """Connect to MongoDB"""
         try:
-            # Connect using certifi for consistent SSL across environments
-            # This fixes 'certificate verify failed' and other SSL errors
+            # Configure client options
+            client_options = {
+                "serverSelectionTimeoutMS": 5000
+            }
+            
+            # Only enable SSL/TLS for remote connections (e.g. Atlas)
+            # Localhost usually doesn't support/require SSL
+            if "localhost" not in self.connection_string and "127.0.0.1" not in self.connection_string:
+                client_options["tlsCAFile"] = certifi.where()
+                
             self.client = AsyncIOMotorClient(
                 self.connection_string,
-                tlsCAFile=certifi.where(),
-                serverSelectionTimeoutMS=5000
+                **client_options
             )
             # Test connection
             await self.client.admin.command('ping')
@@ -125,7 +132,6 @@ class MongoDBManager:
         
         field = f"{biometric_type}_registered"
         
-        result = await self.users_collection.update_one(
         result = await self.users_collection.update_one(
             {"email": email},
             {
